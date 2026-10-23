@@ -1,0 +1,1294 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>热榜助手 V4.8</title>
+<style>
+:root{
+  --bg:#f2f3f5; --panel:#ffffff; --panel2:#fafbfc; --text:#14171c; --sub:#6d7683;
+  --line:#e5e8ec; --line2:#eff1f4; --accent:#e8402f; --accent2:#ff7a45;
+  --blue:#3b6ef6; --blue2:#5b8cff;
+  --shadow:0 1px 2px rgba(16,24,40,.05),0 8px 24px -12px rgba(16,24,40,.12);
+  --shadow-h:0 2px 6px rgba(16,24,40,.08),0 18px 40px -18px rgba(16,24,40,.24);
+  --radius:14px; --fs:15px; --font:"PingFang SC","Microsoft YaHei UI","Microsoft YaHei",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+html[data-theme="dark"]{
+  --bg:#0e1116; --panel:#161a21; --panel2:#1b2029; --text:#e9ecf1; --sub:#96a0af;
+  --line:#262d38; --line2:#1f252e; --accent:#ff5a4d; --accent2:#ff8a5c;
+  --blue:#5b8cff; --blue2:#7aa2ff;
+  --shadow:0 1px 2px rgba(0,0,0,.35),0 10px 28px -14px rgba(0,0,0,.7);
+  --shadow-h:0 2px 8px rgba(0,0,0,.4),0 20px 44px -20px rgba(0,0,0,.8);
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;background:var(--bg);color:var(--text);font-size:var(--fs);font-family:var(--font);
+  -webkit-font-smoothing:antialiased;overflow:hidden;
+}
+body::before{
+  content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background-image:var(--bgimg,none);background-size:cover;background-position:center;
+  opacity:var(--bgop,.14);
+}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:rgba(130,140,155,.35);border-radius:8px;border:3px solid transparent;background-clip:content-box}
+::-webkit-scrollbar-thumb:hover{background:rgba(130,140,155,.6);background-clip:content-box;border:3px solid transparent}
+::-webkit-scrollbar-track{background:transparent}
+button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
+button{cursor:pointer;border:0;background:none}
+svg{display:block}
+
+.app{display:grid;grid-template-columns:244px 1fr;height:100vh}
+
+/* ---------- 侧栏 ---------- */
+.sidebar{background:color-mix(in srgb,var(--panel) 92%,transparent);border-right:1px solid var(--line);
+  display:flex;flex-direction:column;min-height:0;backdrop-filter:blur(8px)}
+.brand{display:flex;align-items:center;gap:10px;padding:16px 15px 10px}
+.mark{width:38px;height:38px;border-radius:11px;flex:none;display:grid;place-items:center;
+  background:linear-gradient(145deg,#2f6bf0,#67a2ff 55%,#8fd0ff);
+  box-shadow:0 7px 16px -7px rgba(59,110,246,.85)}
+.mark svg{width:21px;height:21px;color:#fff}
+.brand h1{font-size:16px;margin:0;font-weight:700;line-height:1.2;letter-spacing:.2px}
+.brand .ver{font-size:10px;font-weight:700;color:#fff;background:linear-gradient(135deg,#3b6ef6,#69a6ff);
+  padding:2px 5px;border-radius:5px;margin-left:5px;vertical-align:2px}
+.brand .by{font-size:11px;color:var(--sub);margin-top:3px}
+.nav{display:flex;gap:5px;padding:8px 12px 4px}
+.nav button{flex:1;padding:7px 4px;border-radius:8px;font-size:12.5px;color:var(--sub);
+  display:flex;align-items:center;justify-content:center;gap:4px;transition:.15s}
+.nav button:hover{background:var(--panel2);color:var(--text)}
+.nav button.on{background:color-mix(in srgb,var(--blue) 12%,transparent);color:var(--blue);font-weight:600}
+.nav button svg{width:14px;height:14px}
+.side-label{font-size:11px;color:var(--sub);letter-spacing:.06em;padding:10px 16px 6px;display:flex;
+  justify-content:space-between;align-items:center}
+.side-label span:last-child{font-size:10.5px;opacity:.75}
+.src-list{flex:1;overflow-y:auto;padding:0 9px 8px;min-height:0}
+.src-item{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:9px;cursor:pointer;
+  transition:background .15s;position:relative;user-select:none}
+.src-item:hover{background:var(--panel2)}
+.src-item.active{background:color-mix(in srgb,var(--blue) 10%,transparent)}
+.src-item.active .nm{color:var(--blue);font-weight:600}
+.src-item.drag{opacity:.4}
+.src-item.over{box-shadow:inset 0 2px 0 var(--blue)}
+.src-item .dot{width:6px;height:6px;border-radius:50%;flex:none;background:var(--line)}
+.src-item.ok .dot{background:#12b76a}
+.src-item.err .dot{background:#f04438}
+.src-item .nm{font-size:13.5px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.src-item .cnt{font-size:11px;color:var(--sub);font-variant-numeric:tabular-nums}
+.src-item .sw{width:31px;height:18px;border-radius:20px;background:var(--line);position:relative;flex:none;transition:.18s}
+.src-item .sw::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;
+  background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:.18s}
+.src-item .sw.on{background:var(--blue)}
+.src-item .sw.on::after{transform:translateX(13px)}
+.side-foot{border-top:1px solid var(--line);padding:9px 9px;display:flex;gap:6px}
+.side-foot button{flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:8px;
+  border-radius:8px;font-size:12.5px;color:var(--sub);background:var(--panel2);transition:.15s}
+.side-foot button:hover{color:var(--text);background:color-mix(in srgb,var(--blue) 8%,var(--panel2))}
+.side-foot button svg{width:13px;height:13px}
+.side-foot button.primary{color:var(--blue);font-weight:600}
+
+/* ---------- 主区 ---------- */
+.main{display:flex;flex-direction:column;min-width:0;min-height:0}
+.topbar{display:flex;align-items:center;gap:9px;padding:11px 18px;border-bottom:1px solid var(--line);
+  background:color-mix(in srgb,var(--panel) 72%,transparent);backdrop-filter:blur(14px)}
+.tb-title{font-size:17px;font-weight:700;display:flex;align-items:baseline;gap:8px;min-width:0;max-width:34%}
+.tb-title span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tb-title .n{font-size:11.5px;font-weight:500;color:var(--sub);flex:none}
+.spacer{flex:1}
+.search{display:flex;align-items:center;gap:6px;background:var(--panel2);border:1px solid var(--line);
+  border-radius:9px;padding:6px 9px;width:186px;transition:.15s}
+.search:focus-within{border-color:color-mix(in srgb,var(--blue) 55%,var(--line));width:250px;background:var(--panel)}
+.search svg{width:14px;height:14px;color:var(--sub);flex:none}
+.search input{border:0;background:none;outline:none;width:100%;font-size:13px}
+.seg{display:flex;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:2px}
+.seg button{padding:5px 10px;border-radius:7px;font-size:12.5px;color:var(--sub);transition:.15s;white-space:nowrap}
+.seg button.on{background:var(--panel);color:var(--text);font-weight:600;box-shadow:0 1px 3px rgba(16,24,40,.1)}
+.ib{width:33px;height:33px;border-radius:9px;display:grid;place-items:center;color:var(--sub);
+  border:1px solid var(--line);background:var(--panel2);transition:.15s;position:relative}
+.ib:hover{color:var(--blue);border-color:color-mix(in srgb,var(--blue) 40%,var(--line))}
+.ib.on{color:#fff;background:linear-gradient(135deg,#3b6ef6,#69a6ff);border-color:transparent}
+.ib svg{width:16px;height:16px}
+.ib.spin svg{animation:sp .9s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+.content{flex:1;overflow-y:auto;padding:16px 18px 40px;min-height:0}
+
+/* 卡片 */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(252px,1fr));gap:13px}
+.card{background:color-mix(in srgb,var(--panel) var(--panelMix,100%),transparent);border:1px solid var(--line);border-radius:var(--radius);
+  overflow:hidden;display:flex;flex-direction:column;box-shadow:var(--shadow);cursor:pointer;
+  transition:transform .16s,box-shadow .16s,border-color .16s;position:relative}
+.card:hover{transform:translateY(-2px);box-shadow:var(--shadow-h);border-color:color-mix(in srgb,var(--blue) 30%,var(--line))}
+.card.speaking{outline:2px solid var(--blue);outline-offset:1px}
+.thumb{aspect-ratio:16/9;background:var(--panel2);position:relative;overflow:hidden;flex:none}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .35s}
+.card:hover .thumb img{transform:scale(1.04)}
+.ph{position:absolute;inset:0;display:grid;place-items:center;font-size:26px;font-weight:800;color:#fff;
+  background:linear-gradient(135deg,var(--blue),#7cb8ff)}
+.cbody{padding:10px 12px 11px;display:flex;flex-direction:column;gap:6px;flex:1}
+.ctop{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--sub)}
+.rk{font-variant-numeric:tabular-nums;font-weight:800;font-size:calc(var(--fs)*.733);color:#fff;background:var(--sub);
+  min-width:19px;height:16px;border-radius:4px;display:inline-flex;align-items:center;justify-content:center;padding:0 4px;flex:none}
+.rk.r1{background:var(--accent)}
+.rk.r2{background:var(--accent2)}
+.rk.r3{background:linear-gradient(135deg,#f2b21b,#ffd76e)}
+.card h3{margin:0;font-size:14px;line-height:1.45;font-weight:600;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.cmeta{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--sub);margin-top:auto}
+.heat{color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums}
+.badge{padding:1px 6px;border-radius:4px;background:var(--panel2);border:1px solid var(--line);
+  font-size:10.5px;color:var(--sub);white-space:nowrap}
+.acts{position:absolute;top:7px;right:7px;display:flex;gap:4px;opacity:0;transform:translateY(-3px);transition:.16s}
+.card:hover .acts,.hcard:hover .acts{opacity:1;transform:none}
+.act{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;color:#fff;
+  background:rgba(16,20,28,.55);backdrop-filter:blur(6px);transition:.15s}
+.act:hover{background:rgba(16,20,28,.82);transform:scale(1.06)}
+.act.on{background:linear-gradient(135deg,#f6b73c,#f59e0b);color:#fff}
+.act svg{width:14px;height:14px}
+
+/* 行 */
+.rows{background:color-mix(in srgb,var(--panel) var(--panelMix,100%),transparent);border:1px solid var(--line);
+  border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow)}
+.row{display:flex;align-items:center;gap:10px;padding:9px 13px;border-bottom:1px solid var(--line2);
+  cursor:pointer;transition:background .12s;position:relative}
+.row:last-child{border-bottom:0}
+.row:hover{background:var(--panel2)}
+.row.speaking{background:color-mix(in srgb,var(--blue) 9%,transparent)}
+.row .tt{flex:1;min-width:0;font-size:calc(var(--fs)*.933);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row:hover .tt{color:var(--blue)}
+.row .ex{font-size:calc(var(--fs)*.767);color:var(--sub);max-width:28%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:none}
+.row .heat{flex:none;min-width:58px;text-align:right;font-size:calc(var(--fs)*.8)}
+.row .acts{position:static;opacity:0;transform:none;flex:none}
+.row:hover .acts{opacity:1}
+.row .act{background:var(--panel2);color:var(--sub);border:1px solid var(--line)}
+
+/* ---- 分类导航（侧栏） ---- */
+.cat-row{display:flex;flex-wrap:wrap;gap:5px;padding:8px 12px 2px}
+.cat-row button{padding:4px 10px;border-radius:14px;font-size:12px;color:var(--sub);
+  background:var(--panel2);border:1px solid var(--line);transition:.15s;white-space:nowrap}
+.cat-row button:hover{color:var(--text);border-color:color-mix(in srgb,var(--blue) 35%,var(--line))}
+.cat-row button.on{background:color-mix(in srgb,var(--blue) 13%,transparent);color:var(--blue);
+  border-color:color-mix(in srgb,var(--blue) 42%,var(--line));font-weight:600}
+.cat-row button em{font-style:normal;opacity:.6;font-size:10.5px;margin-left:2px}
+
+/* ---- 看板视图：多列源面板（参考 rebang.today 看板） ---- */
+.bgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:25px;align-items:stretch}
+@media(max-width:1080px){.bgrid{grid-template-columns:repeat(auto-fill,minmax(252px,1fr))}}
+.bcard{background:color-mix(in srgb,var(--panel) var(--panelMix,100%),transparent);border:1px solid var(--line);
+  border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);
+  height:480px;display:flex;flex-direction:column}
+.bhead{flex:none;display:flex;align-items:center;gap:7px;padding:9px 12px;
+  border-bottom:1px solid var(--line2);cursor:pointer;background:transparent}
+.bhead:hover{background:var(--panel2)}
+.bhead .bdot{width:8px;height:8px;border-radius:3px;background:var(--blue);flex:none}
+.bhead .bnm{font-weight:700;font-size:calc(var(--fs)*.9);color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bhead .bbadge{flex:none;font-size:calc(var(--fs)*.7);padding:1.5px 7px;border-radius:6px;
+  background:color-mix(in srgb,var(--blue) 11%,transparent);color:var(--blue)}
+.bhead .bcnt{margin-left:auto;flex:none;font-size:calc(var(--fs)*.733);color:var(--sub)}
+.bbody{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain}
+.bbody::-webkit-scrollbar{width:6px}
+.bbody::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
+.bbody::-webkit-scrollbar-thumb:hover{background:var(--sub)}
+.bempty{padding:22px 12px;text-align:center;color:var(--sub);font-size:12.5px}
+.bfoot{flex:none;padding:8px 12px;border-top:1px solid var(--line2);text-align:center;
+  font-size:calc(var(--fs)*.8);color:var(--blue);cursor:pointer;background:transparent}
+.bfoot:hover{background:color-mix(in srgb,var(--blue) 9%,var(--panel2));font-weight:600}
+.bitem{display:flex;align-items:flex-start;gap:8px;padding:6.5px 12px;cursor:pointer;font-size:calc(var(--fs)*.867);line-height:1.5}
+.bitem+.bitem{border-top:1px solid var(--line2)}
+.bitem:hover{background:var(--panel2)}
+.bitem .rk{flex:none;width:18px;height:18px;border-radius:5px;display:grid;place-items:center;
+  font-size:11px;font-weight:700;background:var(--panel2);color:var(--sub);margin-top:2px}
+.bitem .rk.t1{background:var(--accent);color:#fff}
+.bitem .rk.t2{background:var(--accent2);color:#fff}
+.bitem .rk.t3{background:#ffa940;color:#fff}
+.bitem .bt{flex:1;min-width:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-all}
+.bitem .bh{flex:none;font-size:calc(var(--fs)*.733);color:var(--sub);margin-top:3px;max-width:74px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ---- 列表视图：两行标题、完整显示 ---- */
+.list-mode .row{align-items:flex-start;padding:11px 14px;gap:11px}
+.list-mode .row .tt{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.5;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:14.5px}
+.list-mode .row .acts{align-self:center}
+.list-mode .rk{align-self:flex-start;margin-top:1px}
+.row .act:hover{background:var(--panel);color:var(--text);transform:none}
+.row .act.on{background:linear-gradient(135deg,#f6b73c,#f59e0b);color:#fff;border-color:transparent}
+
+/* 单源 有图 */
+.hlist{display:flex;flex-direction:column;gap:9px}
+.hcard{display:flex;gap:13px;background:color-mix(in srgb,var(--panel) 96%,transparent);border:1px solid var(--line);
+  border-radius:12px;padding:10px;box-shadow:var(--shadow);cursor:pointer;transition:.16s;position:relative}
+.hcard:hover{border-color:color-mix(in srgb,var(--blue) 30%,var(--line));box-shadow:var(--shadow-h);transform:translateY(-1px)}
+.hcard.speaking{outline:2px solid var(--blue)}
+.hthumb{width:136px;height:84px;border-radius:8px;overflow:hidden;flex:none;background:var(--panel2);position:relative}
+.hthumb img{width:100%;height:100%;object-fit:cover}
+.hbody{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px;padding:1px 0}
+.hbody h3{margin:0;font-size:14.5px;font-weight:600;line-height:1.4;display:-webkit-box;
+  -webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;padding-right:64px}
+.hbody .ex{font-size:12px;color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hmeta{margin-top:auto;display:flex;align-items:center;gap:9px;font-size:11.5px;color:var(--sub)}
+
+.group-h{display:flex;align-items:center;gap:8px;margin:16px 2px 9px;font-size:12.5px;color:var(--sub);font-weight:600}
+.group-h:first-child{margin-top:0}
+.group-h i{width:3px;height:13px;border-radius:2px;background:var(--blue);display:block}
+.group-h em{font-style:normal;color:var(--sub);font-weight:400;font-size:11.5px}
+
+.empty{padding:66px 20px;text-align:center;color:var(--sub);font-size:13.5px;line-height:2}
+.empty .big{font-size:34px;margin-bottom:10px;opacity:.45}
+.err-bar{display:flex;align-items:center;gap:10px;background:color-mix(in srgb,#f04438 8%,var(--panel));
+  border:1px solid color-mix(in srgb,#f04438 26%,var(--line));color:#b42318;border-radius:10px;
+  padding:9px 13px;font-size:12.5px;margin-bottom:12px}
+html[data-theme="dark"] .err-bar{color:#ffb4ab}
+.err-bar button{margin-left:auto;color:inherit;font-weight:600;font-size:12px;text-decoration:underline}
+.skeleton{height:96px;border-radius:12px;background:linear-gradient(90deg,var(--panel2) 25%,var(--line2) 37%,var(--panel2) 63%);
+  background-size:400% 100%;animation:sk 1.3s ease infinite}
+@keyframes sk{0%{background-position:100% 50%}100%{background-position:0 50%}}
+
+/* 朗读条 */
+.player{position:fixed;left:50%;bottom:18px;transform:translateX(-50%) translateY(90px);
+  display:flex;align-items:center;gap:10px;background:color-mix(in srgb,var(--panel) 96%,transparent);
+  border:1px solid var(--line);border-radius:14px;padding:9px 14px;box-shadow:0 18px 46px -16px rgba(16,24,40,.4);
+  transition:.24s;z-index:70;backdrop-filter:blur(10px)}
+.player.on{transform:translateX(-50%) translateY(0)}
+.player .pi{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;color:#fff;
+  background:linear-gradient(135deg,#3b6ef6,#69a6ff);flex:none}
+.player .pi svg{width:15px;height:15px}
+.player .tx{font-size:12.5px;color:var(--sub);max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.player input[type=range]{width:96px;accent-color:var(--blue)}
+.player .rate{font-size:11.5px;color:var(--blue);font-weight:700;min-width:34px;text-align:right}
+
+/* 弹层 */
+.mask{position:fixed;inset:0;background:rgba(12,16,22,.44);backdrop-filter:blur(2px);z-index:90;
+  display:none;align-items:center;justify-content:center;padding:26px}
+.mask.on{display:flex}
+.modal{background:var(--panel);border:1px solid var(--line);border-radius:16px;width:min(820px,100%);
+  max-height:90vh;display:flex;flex-direction:column;box-shadow:0 30px 80px -30px rgba(0,0,0,.5);overflow:hidden;animation:pop .18s ease}
+@keyframes pop{from{transform:translateY(8px);opacity:0}}
+.modal-h{display:flex;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line);gap:10px}
+.modal-h h2{margin:0;font-size:15.5px}
+.modal-h .x{margin-left:auto;width:28px;height:28px;border-radius:7px;display:grid;place-items:center;color:var(--sub)}
+.modal-h .x:hover{background:var(--panel2);color:var(--text)}
+.tabs{display:flex;gap:4px;padding:9px 18px 0;border-bottom:1px solid var(--line)}
+.tabs button{padding:8px 13px;font-size:13px;color:var(--sub);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs button.on{color:var(--blue);border-bottom-color:var(--blue);font-weight:600}
+.modal-b{padding:16px 18px;overflow-y:auto;min-height:260px}
+.field{display:flex;align-items:center;gap:14px;padding:11px 0;border-bottom:1px dashed var(--line2)}
+.field:last-child{border-bottom:0}
+.field .lb{width:118px;flex:none;font-size:13.5px;font-weight:500}
+.field .hint{font-size:11.5px;color:var(--sub);margin-top:3px;font-weight:400;line-height:1.5}
+.field .ctl{margin-left:auto;display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.pill{padding:6px 12px;border:1px solid var(--line);border-radius:8px;font-size:12.5px;background:var(--panel2);color:var(--sub);transition:.15s}
+.pill:hover{border-color:color-mix(in srgb,var(--blue) 40%,var(--line))}
+.pill.on{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600}
+.mini{padding:5px 10px;border:1px solid var(--line);border-radius:7px;font-size:12px;color:var(--sub);background:var(--panel2)}
+.mini:hover{color:var(--text);border-color:color-mix(in srgb,var(--blue) 35%,var(--line))}
+.mini.danger:hover{color:#fff;background:#f04438;border-color:#f04438}
+.srcrow{display:flex;align-items:center;gap:7px;padding:8px 9px;border:1px solid var(--line);border-radius:10px;
+  margin-bottom:7px;background:var(--panel2)}
+.srcrow .sw{width:29px;height:17px;border-radius:20px;background:var(--line);position:relative;flex:none;cursor:pointer}
+.srcrow .sw::after{content:"";position:absolute;top:2px;left:2px;width:13px;height:13px;border-radius:50%;background:#fff;transition:.18s}
+.srcrow .sw.on{background:var(--blue)}
+.srcrow .sw.on::after{transform:translateX(12px)}
+.srcrow .nm{width:92px;flex:none;font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.srcrow input.url{flex:1;min-width:0;border:1px solid var(--line);background:var(--panel);border-radius:7px;
+  padding:5px 8px;font-size:11.5px;outline:none}
+.srcrow input.url:focus{border-color:color-mix(in srgb,var(--blue) 55%,var(--line))}
+.srcrow input.num{width:44px;border:1px solid var(--line);background:var(--panel);border-radius:7px;
+  padding:5px 6px;font-size:11.5px;text-align:center;outline:none}
+.srcrow .ops{display:flex;gap:2px}
+.srcrow .ops button{width:24px;height:24px;border-radius:6px;display:grid;place-items:center;color:var(--sub);font-size:11.5px}
+.srcrow .ops button:hover{background:var(--panel);color:var(--text)}
+.tip{font-size:12px;line-height:1.7;color:var(--sub);background:var(--panel2);border:1px solid var(--line);
+  border-radius:9px;padding:10px 12px;margin-bottom:12px}
+.tip b{color:var(--blue)}
+.addbox{border:1px dashed color-mix(in srgb,var(--blue) 40%,var(--line));border-radius:10px;padding:12px;margin-top:6px;background:var(--panel2)}
+.addbox .r{display:flex;gap:8px;margin-bottom:8px}
+.addbox input,.addbox select{border:1px solid var(--line);background:var(--panel);border-radius:7px;
+  padding:7px 9px;font-size:12.5px;outline:none;min-width:0}
+.about{font-size:13px;line-height:1.9;color:var(--sub)}
+.about b{color:var(--text)}
+.qrbox{display:flex;gap:16px;align-items:flex-start;margin-top:12px;flex-wrap:wrap}
+.qrimg{width:150px;height:150px;border-radius:12px;border:1px solid var(--line);background:var(--panel2);
+  display:grid;place-items:center;overflow:hidden;font-size:12px;color:var(--sub);text-align:center;padding:6px}
+.qrimg img{width:100%;height:100%;object-fit:contain}
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(12px);background:#1b2029;color:#fff;
+  padding:9px 16px;border-radius:9px;font-size:12.5px;opacity:0;pointer-events:none;transition:.22s;z-index:200;
+  box-shadow:0 12px 30px -10px rgba(0,0,0,.6);max-width:70vw;text-align:center}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+.hide{display:none!important}
+@media (max-width:860px){
+  .app{grid-template-columns:1fr}
+  .sidebar{position:fixed;left:0;top:0;bottom:0;width:244px;z-index:60;transform:translateX(-100%);transition:.2s}
+  .sidebar.open{transform:none;box-shadow:0 0 40px rgba(0,0,0,.3)}
+  .search{width:130px}.search:focus-within{width:160px}
+  .tb-title{max-width:40%}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+          <circle cx="10.5" cy="10.5" r="6.2"/><path d="m15.2 15.2 4.4 4.4"/>
+        </svg>
+      </div>
+      <div>
+        <h1>热榜助手<span class="ver">V4.8</span></h1>
+        <div class="by">作者：七度</div>
+      </div>
+    </div>
+
+    <div class="nav">
+      <button id="navAll" class="on">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="7" height="7" rx="1.5"/><rect x="14" y="4" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        聚合</button>
+      <button id="navFav">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="m12 3.5 2.6 5.5 6 .9-4.4 4.2 1 6-5.2-2.8-5.2 2.8 1-6L3.4 9.9l6-.9z"/></svg>
+        收藏</button>
+      <button id="navHist">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
+        记录</button>
+    </div>
+
+    <div class="cat-row" id="catRow"></div>
+
+    <div class="side-label"><span id="srcLabel">新闻源 · 可拖动排序</span><span id="srcCount"></span></div>
+    <div class="src-list" id="srcList"></div>
+    <div class="side-foot">
+      <button id="btnAdd" class="primary">＋ 添加源</button>
+      <button id="btnSet">⚙ 设置</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <div class="tb-title"><span id="viewTitle">聚合热榜</span><span class="n" id="viewSub"></span></div>
+      <div class="spacer"></div>
+      <div class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="q" placeholder="关键词筛选 / 回车搜索">
+      </div>
+      <div class="seg" id="segLayout"><button data-v="board" title="总览看板：每个源一个面板，多列排布">▦ 总览看板</button><button data-v="list" title="列表视图：一行一条">☰ 列表</button></div>
+      <button class="ib" id="btnTts" title="朗读本页标题 (R)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9.5h3.2L12 5.5v13l-4.8-4H4z"/><path d="M16 8.6a5 5 0 0 1 0 6.8"/><path d="M18.6 6a8.6 8.6 0 0 1 0 12"/></svg>
+      </button>
+      <button class="ib" id="btnRefresh" title="刷新 (F5)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>
+      </button>
+      <button class="ib" id="btnSet2" title="设置">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 7 19.4a1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.2-2.9H1a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 2.6 7a1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H7a1.7 1.7 0 0 0 1-1.5V1a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V7a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      </button>
+    </div>
+    <div class="content" id="content"></div>
+  </main>
+</div>
+
+<div class="player" id="player">
+  <div class="pi" id="ppBtn"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="5" width="3.6" height="14" rx="1"/><rect x="13.4" y="5" width="3.6" height="14" rx="1"/></svg></div>
+  <div class="tx" id="pTxt">准备朗读…</div>
+  <input type="range" id="pRate" min="0.6" max="2" step="0.1" value="1">
+  <div class="rate" id="pRateV">1.0x</div>
+  <button class="mini" id="pStop">停止</button>
+</div>
+
+<div class="mask" id="mask">
+  <div class="modal">
+    <div class="modal-h"><h2 id="mTitle">设置</h2><button class="x" id="mClose">✕</button></div>
+    <div class="tabs" id="mTabs">
+      <button data-t="general" class="on">常规</button>
+      <button data-t="look">外观</button>
+      <button data-t="sources">新闻源</button>
+      <button data-t="about">关于</button>
+    </div>
+    <div class="modal-b" id="mBody"></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const el = (t,c,h) => { const n=document.createElement(t); if(c)n.className=c; if(h!=null)n.innerHTML=h; return n; };
+
+const state = {
+  cfg:{settings:{},sources:[]},
+  data:{}, favs:[], hist:[],
+  view:'all', filter:'', loading:new Set(),
+  tab:'general', addOpen:false,
+  zh:{}, showZh:false, transBusy:false,
+  speak:{list:[],i:0,on:false,paused:false},
+  autoHidden:[],
+  cat:'全部',          // 当前分类：全部/综合/财经/娱乐/科技/社区
+  layout:'board',      // 布局：board 看板 / list 列表
+};
+
+const CATS = ['全部','综合','财经','娱乐','科技','社区'];
+function srcCat(s){ const c=(s&&s.cat)||'综合'; return CATS.includes(c)?c:'综合'; }
+function inCat(s){
+  if(state.cat==='全部' || state.cat==='__top') return true;
+  if(state.cat==='__region') return s.id==='region_news';
+  return srcCat(s)===state.cat;
+}
+
+const ICON = {
+  star:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="m12 3.6 2.6 5.4 5.9.9-4.3 4.2 1 5.9-5.2-2.8-5.2 2.8 1-5.9L3.5 9.9l5.9-.9z"/></svg>',
+  starOn:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="m12 3.6 2.6 5.4 5.9.9-4.3 4.2 1 5.9-5.2-2.8-5.2 2.8 1-5.9L3.5 9.9l5.9-.9z"/></svg>',
+  share:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a1.5 1.5 0 0 0 1.5 1.5h13A1.5 1.5 0 0 0 20 19v-7"/><path d="M12 15.5V3.5"/><path d="m7.5 8 4.5-4.5L16.5 8"/></svg>',
+  open:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 4h6v6"/><path d="M20 4 10.5 13.5"/><path d="M18 14v5a1.5 1.5 0 0 1-1.5 1.5H5.5A1.5 1.5 0 0 1 4 19V8a1.5 1.5 0 0 1 1.5-1.5H10"/></svg>',
+};
+
+function toast(m){ const t=$('#toast'); t.textContent=m; t.classList.add('on');
+  clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('on'),2000); }
+function fmtTime(ts){ if(!ts)return '—'; const d=new Date(ts*1000),n=new Date();
+  const hm=d.toTimeString().slice(0,5);
+  return d.toDateString()===n.toDateString()? hm : (d.getMonth()+1)+'/'+d.getDate()+' '+hm; }
+const api=(p,o)=>fetch(p,o).then(r=>r.json());
+
+function saveCfg(){ clearTimeout(state._sv);
+  state._sv=setTimeout(()=>{ api('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({settings:state.cfg.settings,sources:state.cfg.sources})}).catch(()=>{});
+    if(typeof renderCats==='function') renderCats();
+  },320); }
+
+/* ---------------- 主题 / 字体 / 背景 ---------------- */
+const ACCENTS={
+  '':['#e8402f','#ff7a45'], blue:['#3b6ef6','#5b8cff'], green:['#0e9f6e','#34d399'],
+  violet:['#7c5cff','#a78bfa'], cyan:['#0891b2','#22d3ee'], rose:['#e11d74','#fb7185'],
+  amber:['#d97706','#fbbf24'],
+};
+function applyLook(){
+  const s=state.cfg.settings;
+  document.documentElement.dataset.theme = s.theme||'light';
+  const dark=(s.theme||'light')==='dark';
+  const acc=s.accent&&ACCENTS[s.accent] ? ACCENTS[s.accent] : (dark?['#ff5a4d','#ff8a5c']:ACCENTS['']);
+  const rs=document.documentElement.style;
+  rs.setProperty('--accent',acc[0]);
+  rs.setProperty('--accent2',acc[1]);
+  // 配色同时驱动全局高亮色（按钮/徽标/选中态），让配色选择真正生效
+  if(s.accent&&ACCENTS[s.accent]){ rs.setProperty('--blue',acc[0]); rs.setProperty('--blue2',acc[1]); }
+  else { rs.removeProperty('--blue'); rs.removeProperty('--blue2'); }
+  rs.setProperty('--fs',(15*(s.fontScale||1))+'px');
+  rs.setProperty('--font', s.fontFamily||'"PingFang SC","Microsoft YaHei UI","Microsoft YaHei",system-ui,-apple-system,"Segoe UI",sans-serif');
+  if(s.bgImage){
+    document.documentElement.style.setProperty('--bgimg',`url("${s.bgImage}")`);
+    document.documentElement.style.setProperty('--bgop',(s.bgOpacity??0.14));
+    // 新闻框跟随背景浓度变得半透明，让背景图透进框里
+    document.documentElement.style.setProperty('--panelMix',Math.round((1-(s.bgOpacity??0.14))*100)+'%');
+  }else{
+    document.documentElement.style.setProperty('--bgimg','none');
+    document.documentElement.style.setProperty('--panelMix','100%');
+  }
+}
+
+/* ---------------- 侧栏 ---------------- */
+let dragId=null;
+function renderSidebar(){
+  const box=$('#srcList'); box.innerHTML='';
+  const shown = state.cfg.sources.filter(s=>s.enabled && inCat(s));
+  const allOn = state.cfg.sources.filter(s=>s.enabled);
+  $('#srcCount').textContent = shown.length+'/'+state.cfg.sources.length;
+  const lb=$('#srcLabel');
+  if(lb) lb.textContent = (state.cat==='全部'?'新闻源 · 可拖动排序':state.cat==='__top'?'总排行 · 全部源':state.cat==='__region'?'地区新闻 · 使用者设置':state.cat+' · 可拖动排序');
+  shown.forEach(s=>{
+    const d=state.data[s.id]||{};
+    const cls=['src-item', state.view===s.id?'active':'', d.error?'err':(d.items&&d.items.length?'ok':'')].filter(Boolean).join(' ');
+    const row=el('div',cls);
+    row.draggable=true;
+    row.dataset.id=s.id;
+    row.innerHTML=`<span class="dot"></span><span class="nm">${esc(s.name)}</span>
+      <span class="cnt">${d.items&&d.items.length?d.items.length:'·'}</span>
+      <span class="sw on" title="点击隐藏该源"></span>`;
+    row.onclick=e=>{
+      if(e.target.classList.contains('sw')){ s.enabled=false; saveCfg(); renderSidebar(); render(); return; }
+      state.view=s.id; renderSidebar(); render();
+    };
+    row.ondragstart=e=>{ dragId=s.id; e.dataTransfer.effectAllowed='move'; row.classList.add('drag'); };
+    row.ondragend=()=>{ row.classList.remove('drag'); document.querySelectorAll('.src-item').forEach(n=>n.classList.remove('over')); };
+    row.ondragover=e=>{ e.preventDefault(); row.classList.add('over'); };
+    row.ondragleave=()=>row.classList.remove('over');
+    row.ondrop=e=>{
+      e.preventDefault(); row.classList.remove('over');
+      if(!dragId||dragId===s.id) return;
+      const arr=state.cfg.sources;
+      const from=arr.findIndex(x=>x.id===dragId), to=arr.findIndex(x=>x.id===s.id);
+      if(from<0||to<0) return;
+      const [m]=arr.splice(from,1); arr.splice(to,0,m);
+      saveCfg(); renderSidebar(); toast('已调整顺序');
+    };
+    box.appendChild(row);
+  });
+  if(!shown.length){
+    box.appendChild(el('div','empty', allOn.length && state.cat!=='全部'
+      ? '<div class="big">🗂</div>「'+esc(state.cat)+'」分类下没有可用的源<br>点上方「全部」查看其他分类'
+      : '<div class="big">👀</div>所有源都被隐藏了<br>去「设置 → 新闻源」打开'));
+  }
+}
+
+/* ---------------- 数据 ---------------- */
+const enabled=()=>state.cfg.sources.filter(s=>s.enabled);
+
+function loadSources(srcs, force){
+  const list=srcs.filter(s=>s&&s.id);
+  if(!list.length) return Promise.resolve();
+  list.forEach(s=>state.loading.add(s.id));
+  return Promise.all(list.map(s=>
+    api('/api/hot?ids='+encodeURIComponent(s.id)+(force?'&force=1':''))
+      .then(r=>Object.assign(state.data,r.sources||{}))
+      .catch(()=>{ (state.data[s.id]=state.data[s.id]||{}).error='本地服务无响应'; })
+      .finally(()=>{ state.loading.delete(s.id);
+        const c=$('#content'), sc=c.scrollTop; renderSidebar(); render(); c.scrollTop=sc; })
+  ));
+}
+function refreshAll(force){
+  const b=$('#btnRefresh'); b.classList.add('spin');
+  loadSources(enabled(), force!==false).finally(()=>setTimeout(()=>b.classList.remove('spin'),300));
+}
+
+/* ---------------- 聚合 ---------------- */
+function aggregate(){
+  const out=[];
+  enabledInCat().forEach(s=>{
+    const d=state.data[s.id]; if(!d||!d.items) return;
+    const per=Math.min(s.count||state.cfg.settings.perSource||30, d.items.length);
+    const len=Math.max(1,d.items.length);
+    d.items.slice(0,per).forEach((it,i)=>out.push(Object.assign({},it,{srcName:s.name,srcId:s.id,score:(1-i/len)*100})));
+  });
+  const seen=new Set(), list=[];
+  out.forEach(it=>{ const k=it.title.replace(/[\s\W]+/g,'').slice(0,30); if(seen.has(k))return; seen.add(k); list.push(it); });
+  if(state.cat==='__top'||state.cat==='__region'){
+    // 总排行/地区新闻：按阅读/评论/热度数值降序
+    list.sort((a,b)=>(b.heat||0)-(a.heat||0)||(b.score-a.score));
+  }
+  else if(state.cfg.settings.sortAgg==='source') list.sort((a,b)=>(a.srcId<b.srcId?-1:1)||(b.score-a.score));
+  else list.sort((a,b)=>(b.score-a.score)||((b.heat||0)-(a.heat||0)));
+  return list.slice(0,320);
+}
+function match(it){ return !state.filter || (it.title+' '+(it.extra||'')).toLowerCase().includes(state.filter.toLowerCase()); }
+const titleOf = it => (state.showZh && state.zh[it.title]) ? state.zh[it.title] : it.title;
+
+/* ---------------- 渲染 ---------------- */
+const rankCls=r=>r===1?'r1':r===2?'r2':r===3?'r3':'';
+const isFav=it=>state.favs.some(f=>(f.url||'')+f.title===(it.url||'')+it.title);
+const favId=it=>((it.url||'')+'|'+it.title).replace(/"/g,'&quot;');
+
+function actsHTML(it){
+  return `<div class="acts">
+    <button class="act ${isFav(it)?'on':''}" data-act="fav" title="收藏">${isFav(it)?ICON.starOn:ICON.star}</button>
+    <button class="act" data-act="share" title="转发">${ICON.share}</button>
+  </div>`;
+}
+function cardHTML(it,showSrc){
+  const ph=esc(it.title.slice(0,1));
+  const img=it.img?`<img loading="lazy" decoding="async" src="${it.img}" alt="" onerror="this.style.display='none';this.parentNode.querySelector('.ph').style.display='grid'">`:'';
+  return `<article class="card" data-url="${esc(it.url)}" data-idx="${it._i}">
+    <div class="thumb"><div class="ph" style="${it.img?'display:none':''}">${ph}</div>${img}</div>
+    ${actsHTML(it)}
+    <div class="cbody">
+      <div class="ctop"><span class="rk ${rankClass(it.rank)}">${it.rank}</span>
+        ${showSrc&&it.srcName?`<span class="badge">${esc(it.srcName)}</span>`:''}
+        ${it.extra?`<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:110px">${esc(it.extra)}</span>`:''}
+      </div>
+      <h3>${esc(titleOf(it))}</h3>
+      <div class="cmeta">${it.heatText?`<span class="heat">🔥 ${esc(it.heatText)}</span>`:''}
+        ${!showSrc&&it.srcName?`<span class="badge" style="margin-left:auto">${esc(it.srcName)}</span>`:''}
+      </div>
+    </div></article>`;
+}
+const rankClass=rankCls;
+function hcardHTML(it){
+  const ph=esc(it.title.slice(0,1));
+  const img=it.img?`<img loading="lazy" decoding="async" src="${it.img}" alt="" onerror="this.style.display='none';this.parentNode.querySelector('.ph').style.display='grid'">`:'';
+  return `<div class="hcard" data-url="${esc(it.url)}" data-idx="${it._i}">
+    <div class="hthumb"><div class="ph" style="${it.img?'display:none':''}">${ph}</div>${img}</div>
+    ${actsHTML(it)}
+    <div class="hbody"><h3>${esc(titleOf(it))}</h3>
+      ${it.extra?`<div class="ex">${esc(it.extra)}</div>`:''}
+      <div class="hmeta"><span class="rk ${rankCls(it.rank)}">${it.rank}</span>
+        ${it.heatText?`<span class="heat">🔥 ${esc(it.heatText)}</span>`:''}</div>
+    </div></div>`;
+}
+function rowHTML(it,showSrc){
+  return `<div class="row" data-url="${esc(it.url)}" data-idx="${it._i}">
+    <span class="rk ${rankCls(it.rank)}">${it.rank}</span>
+    <span class="tt">${esc(titleOf(it))}</span>
+    ${it.extra?`<span class="ex">${esc(it.extra)}</span>`:''}
+    ${it.heatText?`<span class="heat">${esc(it.heatText)}</span>`:''}
+    ${showSrc&&it.srcName?`<span class="badge">${esc(it.srcName)}</span>`:''}
+    ${actsHTML(it)}
+  </div>`;
+}
+
+function currentList(){
+  if(state.view==='fav') return state.favs.map((f,i)=>Object.assign({},f,{rank:i+1,srcName:f.src,_i:i})).filter(match);
+  if(state.view==='hist') return state.hist.map((f,i)=>Object.assign({},f,{rank:i+1,srcName:f.src,_i:i})).filter(match);
+  if(state.view==='all') return aggregate().filter(match).map((it,i)=>{it._i=i;return it;});
+  const s=state.cfg.sources.find(x=>x.id===state.view);
+  const d=state.data[state.view]||{};
+  const per=s?Math.min(s.count||30,999):30;
+  return (d.items||[]).filter(match).slice(0,per).map((it,i)=>{it._i=i;return it;});
+}
+
+/* 当前分类下的源（分类过滤 + 原始开关） */
+function enabledInCat(){ return enabled().filter(inCat); }
+
+/* 分类导航渲染 */
+function renderCats(){
+  const box=$('#catRow'); if(!box) return;
+  const shown = enabled();
+  box.innerHTML = CATS.map(c=>{
+    const n = c==='全部' ? shown.length : shown.filter(s=>srcCat(s)===c).length;
+    if(c!=='全部' && !n) return '';   // 该分类没有任何源就不显示
+    return `<button data-c="${c}" class="${state.cat===c?'on':''}">${c}<em>${n}</em></button>`;
+  }).join('')
+    + `<button data-c="__region" class="${state.cat==='__region'?'on':''}" title="使用者设置的地区新闻（省/市），在设置里添加">地区新闻</button>`
+    + `<button data-c="__top" class="${state.cat==='__top'?'on':''}" title="全部源按阅读/评论/热度合并排序">总排行</button>`;
+  box.querySelectorAll('button').forEach(b=>b.onclick=()=>{
+    state.cat=b.dataset.c; renderCats(); renderSidebar(); render();
+  });
+}
+
+function render(){
+  const c=$('#content');
+  const agg=state.view==='all';
+  const isTop=state.cat==='__top', isRegion=state.cat==='__region';
+  // 标题
+  if(agg){ const cn=isTop?'（总排行）':(isRegion?'（地区新闻）':(state.cat==='全部'?'':' · '+state.cat));
+    $('#viewTitle').textContent='聚合热榜'+cn;
+    const ok=(isTop?enabled():enabledInCat()).filter(s=>((state.data[s.id]||{}).items||[]).length);
+    const n=ok.reduce((a,s)=>a+(state.data[s.id].items.length),0);
+    $('#viewSub').textContent=n?`${n} 条 · ${ok.length} 个源`:'';
+  }else if(state.view==='fav'){ $('#viewTitle').textContent='我的收藏'; $('#viewSub').textContent=state.favs.length+' 条'; }
+  else if(state.view==='hist'){ $('#viewTitle').textContent='浏览记录'; $('#viewSub').textContent=state.hist.length+' 条'; }
+  else { const s=state.cfg.sources.find(x=>x.id===state.view);
+    $('#viewTitle').textContent=s?s.name:''; const d=state.data[state.view]||{};
+    $('#viewSub').textContent=d.ts?'更新于 '+fmtTime(d.ts):''; }
+  const layBox=$('#segLayout');
+  if(layBox) layBox.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.v===state.layout));
+  c.classList.toggle('list-mode', state.layout==='list');
+  $('#navAll').classList.toggle('on',state.view==='all');
+  $('#navFav').classList.toggle('on',state.view==='fav');
+  $('#navHist').classList.toggle('on',state.view==='hist');
+
+  c.innerHTML='';
+  const items=currentList();
+
+  // 失败源提示
+  if(agg){
+    if(state.autoHidden&&state.autoHidden.length&&(!state.autoHiddenAt||Date.now()-state.autoHiddenAt<=3000)){
+      const bar=el('div','err-bar',`<span>🛰 本次启动有 ${state.autoHidden.length} 个源没抓到数据，已自动隐藏：${esc(state.autoHidden.slice(0,4).map(h=>h.name).join('、'))}${state.autoHidden.length>4?' 等':''}</span><button>恢复显示</button>`);
+      bar.querySelector('button').onclick=restoreHidden;
+      c.appendChild(bar);
+      clearTimeout(state._ahT);
+      state._ahT=setTimeout(()=>render(),3100);   // 3 秒后自动关闭
+    }
+    const errs=enabled().filter(s=>(state.data[s.id]||{}).error);
+    if(state.cfg.settings.showOnlyOk && errs.length){
+      const bar=el('div','err-bar',`<span>⚠ ${esc(errs.slice(0,4).map(s=>s.name).join('、'))}${errs.length>4?' 等':''} 暂时取不到数据，已自动隐藏</span><button>重试</button>`);
+      bar.querySelector('button').onclick=()=>loadSources(errs,true);
+      c.appendChild(bar);
+    }
+  }
+  if(state.view==='fav'&&!items.length){
+    c.innerHTML='<div class="empty"><div class="big">⭐</div>还没有收藏<br>把鼠标移到新闻上，点右侧星标即可收藏</div>'; return;
+  }
+  if(state.view==='hist'&&!items.length){
+    c.innerHTML='<div class="empty"><div class="big">🕘</div>还没有浏览记录<br>点开任意新闻后会自动记录</div>'; return;
+  }
+  if(isRegion&&!items.length){
+    const set=state.cfg.settings.region||'';
+    c.innerHTML=`<div class="empty"><div class="big">📍</div>${set
+      ?('地区「'+esc(set)+'」暂时没抓到新闻，点右上角刷新试试')
+      :'还没有设置地区<br>去「设置 → 通用 → 地区新闻」填省份或城市，<br>如「广东」或「广东 广州」'}<br><br><button class="mini primary" id="goRegion">去设置地区</button></div>`;
+    const g=$('#goRegion'); if(g) g.onclick=()=>openModal('general');
+    return;
+  }
+  if(!items.length){
+    if([...state.loading].length && agg && state.layout==='board' && !isTop && !isRegion){
+      // 总览看板加载骨架：与看板同构
+      c.innerHTML=`<div class="bgrid">${'<section class="bcard"><div class="bhead"><div class="skeleton" style="height:16px;width:62%;margin:0"></div></div><div class="bbody"><div class="skeleton" style="height:230px;border-radius:0;margin:0"></div></div></section>'.repeat(9)}</div>`;
+    }
+    else if([...state.loading].length) c.innerHTML=`<div class="grid">${'<div class="skeleton"></div>'.repeat(9)}</div>`;
+    else c.innerHTML=`<div class="empty"><div class="big">🗂</div>${state.filter?'没有匹配“'+esc(state.filter)+'”的内容':'暂无内容，点右上角刷新'}</div>`;
+    return;
+  }
+  // 总排行/地区/列表/无图 → 紧凑列表；聚合 → 总览看板；单源 → 原卡片
+  if(state.layout==='list' || isTop || isRegion){
+    const box=el('div','rows'); box.innerHTML=items.map(it=>rowHTML(it,agg)).join(''); c.appendChild(box);
+    bind(c); return;
+  }
+  if(agg){
+    // 总览看板：每个源一个独立面板，固定大小、内部滚动铺满；每源默认 15 条；搜索关键词同样过滤看板条目
+    const bc=Math.max(1,Math.min(50,parseInt(state.cfg.settings.boardCount,10)||15));
+    const g=el('div','bgrid');
+    const srcs=enabledInCat().filter(s=>(state.data[s.id]||{items:[]}).items.some(match));
+    g.innerHTML=srcs.map(s=>{
+      const d=state.data[s.id]||{}; const fm=d.items.filter(match);
+      const per=Math.min(bc,fm.length);
+      return `<section class="bcard">
+        <div class="bhead" data-sid="${esc(s.id)}" title="点击只看该源">
+          <span class="bdot"></span><span class="bnm">${esc(s.name)}</span>
+          <span class="bbadge">${esc(srcCat(s))}</span><span class="bcnt">${per} 条</span></div>
+        <div class="bbody">${fm.slice(0,per).map((it,i)=>`
+        <div class="bitem" title="${esc(it.title)}" data-url="${esc(it.url)}" data-tt="${esc(it.title)}"
+             data-src="${esc(s.name)}" data-ht="${esc(it.heatText||'')}">
+          <span class="rk ${i<3?'t'+(i+1):''}">${i+1}</span>
+          <span class="bt">${esc(it.title)}</span>
+          ${it.heatText?`<span class="bh">${esc(it.heatText)}</span>`:''}
+        </div>`).join('') || '<div class="bempty">暂无内容</div>'}</div>
+        <div class="bfoot" data-sid="${esc(s.id)}" title="查看该源全部新闻">浏览更多 →</div>
+      </section>`;
+    }).join('');
+    c.appendChild(g);
+    g.querySelectorAll('.bhead,.bfoot').forEach(h=>h.onclick=()=>{
+      state.view=h.dataset.sid; renderSidebar(); render();
+    });
+    g.querySelectorAll('.bitem').forEach(n=>{
+      const it={title:n.dataset.tt,url:n.dataset.url,srcName:n.dataset.src,heatText:n.dataset.ht};
+      n.onclick=()=>{ if(n.dataset.url){ pushHistory(it); window.open(n.dataset.url,'_blank'); } };
+      n.oncontextmenu=e=>{ e.preventDefault();
+        if(navigator.clipboard) navigator.clipboard.writeText(it.title).then(()=>toast('已复制标题')); };
+    });
+  }else{
+    // 单源视图：紧凑列表（标题两行完整显示）
+    const box=el('div','rows'); box.innerHTML=items.map(it=>rowHTML(it,false)).join(''); c.appendChild(box);
+  }
+  bind(c);
+}
+
+function bind(root){
+  root.querySelectorAll('[data-url]').forEach(n=>{
+    const url=n.dataset.url||'';
+    n.onclick=e=>{
+      const act=e.target.closest('[data-act]');
+      const it=currentList()[+n.dataset.idx];
+      if(act){ e.stopPropagation();
+        if(act.dataset.act==='fav') toggleFav(it);
+        else share(it);
+        return;
+      }
+      if(!url) return;
+      pushHistory(it);
+      window.open(url,'_blank');
+    };
+    n.oncontextmenu=e=>{ e.preventDefault();
+      const it=currentList()[+n.dataset.idx];
+      if(it&&navigator.clipboard) navigator.clipboard.writeText(it.title).then(()=>toast('已复制标题'));
+    };
+  });
+}
+
+function toggleFav(it){
+  const on=isFav(it);
+  api('/api/fav',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({action:on?'remove':'add',item:{title:it.title,url:it.url,img:it.img,src:it.srcName,heatText:it.heatText,ts:Date.now()/1000}})})
+    .then(r=>{ state.favs=r.favorites||[]; toast(on?'已取消收藏':'已收藏 ★'); render(); });
+}
+function share(it){
+  const txt=`${it.title} ${it.url||''}`.trim();
+  if(navigator.share){ navigator.share({title:it.title,url:it.url}).catch(()=>{}); return; }
+  if(navigator.clipboard) navigator.clipboard.writeText(txt).then(()=>toast('已复制，可直接发给好友')).catch(()=>toast('复制失败'));
+  else toast('复制失败');
+}
+let histTimer=null, histBuf=[];
+function pushHistory(it){
+  if(!it) return;
+  histBuf.push({title:it.title,url:it.url,srcName:it.srcName});
+  clearTimeout(histTimer);
+  histTimer=setTimeout(()=>{
+    api('/api/history',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:histBuf})})
+      .then(r=>{ state.hist=r.history||[]; }).catch(()=>{});
+    histBuf=[];
+  },600);
+}
+
+/* ---------------- 朗读 ---------------- */
+const sp=state.speak;
+function speakCurrent(cont){
+  if(!('speechSynthesis' in window)){ toast('当前浏览器不支持朗读'); return; }
+  if(!cont){  // 全新开始：重建队列；cont=true 表示上一条读完自动续播
+    const list=currentList().filter(match).slice(0,60);
+    if(!list.length){ toast('本页没有可朗读的标题'); return; }
+    sp.list=list; sp.i=0; sp.on=true; sp.paused=false;
+    $('#player').classList.add('on');
+  }
+  if(!sp.on) return;
+  if(sp.i>=sp.list.length){ stopSpeak(); toast('本页已读完'); return; }
+  speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance();
+  u.rate=parseFloat(state.cfg.settings.ttsRate||1);
+  u.lang='zh-CN';
+  sp.cur=u;  // 标记当前语音，忽略被 cancel 的旧回调
+  u.onend=()=>{
+    if(!sp.on||sp.cur!==u) return;
+    sp.i++;
+    setTimeout(()=>speakCurrent(true),150);
+  };
+  u.onerror=(e)=>{ if(!sp.on||sp.cur!==u) return; if(e&&e.error==='interrupted'||e&&e.error==='canceled') return;
+    sp.i++; setTimeout(()=>speakCurrent(true),150); };
+  u.text='第 '+(sp.i+1)+' 条。'+sp.list[sp.i].title;
+  $('#pTxt').textContent='('+(sp.i+1)+'/'+sp.list.length+') '+sp.list[sp.i].title;
+  highlightSpeaking(sp.list[sp.i]);
+  speechSynthesis.speak(u);
+}
+function highlightSpeaking(it){
+  document.querySelectorAll('.speaking').forEach(n=>n.classList.remove('speaking'));
+  const n=document.querySelector(`[data-idx="${it._i}"]`);
+  if(n){ n.classList.add('speaking'); n.scrollIntoView({block:'center',behavior:'smooth'}); }
+}
+function stopSpeak(){
+  sp.on=false; sp.paused=false; sp.cur=null;
+  try{ speechSynthesis.cancel(); }catch(e){}
+  $('#player').classList.remove('on');
+  document.querySelectorAll('.speaking').forEach(n=>n.classList.remove('speaking'));
+}
+$('#btnTts').onclick=()=>{
+  if(sp.on && !sp.paused){ speechSynthesis.pause(); sp.paused=true;
+    $('#ppBtn').innerHTML='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>'; return; }
+  if(sp.on && sp.paused){ speechSynthesis.resume(); sp.paused=false;
+    $('#ppBtn').innerHTML='<svg viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="5" width="3.6" height="14" rx="1"/><rect x="13.4" y="5" width="3.6" height="14" rx="1"/></svg>'; return; }
+  speakCurrent();
+};
+$('#ppBtn').onclick=()=>$('#btnTts').click();
+$('#pStop').onclick=stopSpeak;
+$('#pRate').oninput=e=>{
+  const v=parseFloat(e.target.value);
+  $('#pRateV').textContent=v.toFixed(1)+'x';
+  state.cfg.settings.ttsRate=v; saveCfg();
+  if(sp.on){ speechSynthesis.cancel(); clearTimeout(sp._rt);
+    sp._rt=setTimeout(()=>{ if(sp.on) speakCurrent(true); },120); }
+};
+
+/* ---------------- 设置面板 ---------------- */
+function openModal(tab){ state.tab=tab||'general'; $('#mask').classList.add('on'); renderModal(); }
+function closeModal(){ $('#mask').classList.remove('on'); state.addOpen=false; }
+$('#mClose').onclick=closeModal;
+$('#mask').onclick=e=>{ if(e.target.id==='mask') closeModal(); };
+$('#mTabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{ state.tab=b.dataset.t; renderModal(); });
+$('#btnSet').onclick=()=>openModal('general');
+$('#btnSet2').onclick=()=>openModal('general');
+$('#btnAdd').onclick=()=>{ state.addOpen=true; openModal('sources'); };
+
+function setS(k,v){ state.cfg.settings[k]=v; saveCfg(); applyLook(); renderModal(); render(); renderSidebar();
+  // 全局每源条数：同步到所有源（单个源之后仍可在「新闻源」里单独改）并立即重新抓取生效
+  if(k==='perSource'){ state.cfg.sources.forEach(s=>{ s.count=v; }); saveCfg(); refreshAll(true); } }
+
+function renderModal(){
+  $('#mTabs').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.t===state.tab));
+  const B=$('#mBody'); B.innerHTML=''; const S=state.cfg.settings;
+
+  if(state.tab==='general'){
+    B.innerHTML=`
+      <div class="field"><div class="lb">每源条数<div class="hint">默认值，单个源可在「新闻源」里单独设置</div></div>
+        <div class="ctl">${[10,20,30,50].map(n=>`<button class="pill ${S.perSource==n?'on':''}" data-k="perSource" data-v="${n}">${n}</button>`).join('')}</div></div>
+      <div class="field"><div class="lb">看板每源条数<div class="hint">看板模式下每个源面板显示的条数</div></div>
+        <div class="ctl">${[6,10,15,20,30].map(n=>`<button class="pill ${(+S.boardCount||15)==n?'on':''}" data-k="boardCount" data-v="${n}">${n}</button>`).join('')}</div></div>
+      <div class="field"><div class="lb">地区新闻<div class="hint">填省份或省市，如「广东」或「广东 广州」；留空关闭。保存后左侧出现「地区新闻」源</div></div>
+        <div class="ctl"><input id="regionInput" class="url" style="max-width:260px" value="${esc(S.region||'')}"
+          placeholder="例：广东 广州" spellcheck="false">
+          <button class="pill" id="regionSave">保存地区</button></div></div>
+      <div class="field"><div class="lb">自动刷新</div>
+        <div class="ctl">${[0,5,10,20,30].map(n=>`<button class="pill ${S.autoRefresh==n?'on':''}" data-k="autoRefresh" data-v="${n}">${n?n+' 分钟':'关闭'}</button>`).join('')}</div></div>
+      <div class="field"><div class="lb">聚合排序</div>
+        <div class="ctl">
+          <button class="pill ${S.sortAgg!=='source'?'on':''}" data-k="sortAgg" data-v="heat">综合热度</button>
+          <button class="pill ${S.sortAgg==='source'?'on':''}" data-k="sortAgg" data-v="source">按来源分组</button></div></div>
+      <div class="field"><div class="lb">关闭窗口时<div class="hint">托盘模式会留在右下角，双击图标可再打开</div></div>
+        <div class="ctl">
+          <button class="pill ${S.closeAction!=='exit'?'on':''}" data-k="closeAction" data-v="tray">最小化到托盘</button>
+          <button class="pill ${S.closeAction==='exit'?'on':''}" data-k="closeAction" data-v="exit">直接退出</button></div></div>
+      <div class="field"><div class="lb">窗口形式</div>
+        <div class="ctl">
+          <button class="pill ${S.openMode!=='browser'?'on':''}" data-k="openMode" data-v="app">独立窗口</button>
+          <button class="pill ${S.openMode==='browser'?'on':''}" data-k="openMode" data-v="browser">默认浏览器</button></div></div>
+      <div class="field"><div class="lb">朗读语速</div>
+        <div class="ctl">${[0.8,1,1.2,1.5,1.8].map(n=>`<button class="pill ${Math.abs((S.ttsRate||1)-n)<0.01?'on':''}" data-k="ttsRate" data-v="${n}">${n.toFixed(1)}x</button>`).join('')}</div></div>
+      <div class="field"><div class="lb">启动自动检测<div class="hint">每次打开软件先强制刷新全部源，没抓到数据的自动隐藏</div></div>
+        <div class="ctl">
+          <button class="pill ${S.startupCheck!==false?'on':''}" data-k="startupCheck" data-v="1">开启</button>
+          <button class="pill ${S.startupCheck===false?'on':''}" data-k="startupCheck" data-v="0">关闭</button></div></div>
+      <div class="field"><div class="lb">只显示可用源<div class="hint">取不到数据的源自动从首页隐藏</div></div>
+        <div class="ctl">
+          <button class="pill ${S.showOnlyOk?'on':''}" data-k="showOnlyOk" data-v="1">开启</button>
+          <button class="pill ${!S.showOnlyOk?'on':''}" data-k="showOnlyOk" data-v="0">关闭</button></div></div>`;
+    B.querySelectorAll('.pill').forEach(b=>b.onclick=()=>{
+      let v=b.dataset.v;
+      if(['perSource','autoRefresh','boardCount'].includes(b.dataset.k)) v=parseInt(v,10);
+      if(b.dataset.k==='ttsRate') v=parseFloat(v);
+      if(b.dataset.k==='showOnlyOk') v=(v==='1');
+      if(b.dataset.k==='startupCheck') v=(v==='1');
+      setS(b.dataset.k,v);
+    });
+    // 地区新闻：保存时动态维护 region_news 源
+    const rbtn=B.querySelector('#regionSave');
+    if(rbtn) rbtn.onclick=()=>{
+      const inp=B.querySelector('#regionInput');
+      const region=(inp.value||'').trim().replace(/\s+/g,' ').slice(0,20);
+      S.region=region;
+      const have=state.cfg.sources.find(s=>s.id==='region_news');
+      if(!region){
+        state.cfg.sources=state.cfg.sources.filter(s=>s.id!=='region_news');
+        saveCfg(); renderModal(); renderSidebar(); render(); toast('地区新闻已关闭'); return;
+      }
+      const q=encodeURIComponent(region);
+      const src={id:'region_news', name:'地区·'+region,
+        url:'https://news.so.com/ns?q='+q+'&pn=1', parser:'360news', sel:{},
+        count:30, enabled:true, note:'360新闻·按地区聚合', search:'', cat:'综合'};
+      if(have){ Object.assign(have, src); } else { state.cfg.sources.unshift(src); }
+      saveCfg(); renderModal(); renderSidebar(); render();
+      toast('地区新闻已设置：'+region);
+      loadSources([src], true);
+    };
+  }
+
+  if(state.tab==='look'){
+    const fonts=[
+      ['','系统默认'],['"Microsoft YaHei","微软雅黑",sans-serif','微软雅黑'],
+      ['"DengXian","等线",sans-serif','等线'],['SimSun,"宋体",serif','宋体'],
+      ['SimHei,"黑体",sans-serif','黑体'],['KaiTi,"楷体",serif','楷体'],
+      ['FangSong,"仿宋",serif','仿宋'],['YouYuan,"幼圆",sans-serif','幼圆'],
+      ['LiSu,"隶书",serif','隶书'],['"Source Han Sans SC","思源黑体",sans-serif','思源黑体'],
+      ['"HarmonyOS Sans SC",sans-serif','鸿蒙黑体'],['"Segoe UI",system-ui,sans-serif','Segoe UI'],
+      ['Arial,sans-serif','Arial'],['"Times New Roman",serif','Times New Roman'],
+    ];
+    const accents=[['','经典红'],['blue','清爽蓝'],['green','自然绿'],['violet','优雅紫'],
+      ['cyan','湖光青'],['rose','玫瑰粉'],['amber','暖阳橙']];
+    B.innerHTML=`
+      <div class="field"><div class="lb">主题</div>
+        <div class="ctl">
+          <button class="pill ${S.theme!=='dark'?'on':''}" data-k="theme" data-v="light">浅色</button>
+          <button class="pill ${S.theme==='dark'?'on':''}" data-k="theme" data-v="dark">深色</button></div></div>
+      <div class="field"><div class="lb">主题配色<div class="hint">高亮、按钮、排名徽标的颜色</div></div>
+        <div class="ctl">
+          ${accents.map(([v,t])=>`<button class="pill ${(S.accent||'')===v?'on':''}" data-acc="${v}">${t}</button>`).join('')}
+        </div></div>
+      <div class="field"><div class="lb">界面字体<div class="hint">均为 Windows 常规自带字体</div></div>
+        <div class="ctl" style="max-width:70%">
+          ${fonts.map(([v,t])=>`<button class="pill ${(S.fontFamily||'')===v?'on':''}" data-font="${esc(v)}">${t}</button>`).join('')}
+        </div></div>
+      <div class="field"><div class="lb">自定义字体<div class="hint">填系统里已装的字体名，如 微软雅黑</div></div>
+        <div class="ctl"><input id="fontIn" class="mini" style="width:190px;padding:6px 9px" placeholder="字体名称" value="${esc(S.fontFamily||'')}">
+          <button class="mini" id="fontApply">应用</button></div></div>
+      <div class="field"><div class="lb">字号</div>
+        <div class="ctl">${[['0.92','小'],['1','标准'],['1.08','大'],['1.16','特大']].map(([v,t])=>`<button class="pill ${String(S.fontScale)==v?'on':''}" data-k="fontScale" data-v="${v}">${t}</button>`).join('')}</div></div>
+      <div class="field"><div class="lb">背景图片<div class="hint">选一张本地图片做背景，建议浅色或低对比</div></div>
+        <div class="ctl">
+          <button class="mini" id="bgPick">选择图片</button>
+          <button class="mini danger" id="bgClear">清除</button>
+        </div></div>
+      <div class="field"><div class="lb">背景浓度</div>
+        <div class="ctl"><input type="range" id="bgOp" min="0" max="0.6" step="0.02" value="${S.bgOpacity??0.14}" style="width:170px;accent-color:var(--blue)">
+          <span id="bgOpV" style="font-size:12px;color:var(--sub)">${Math.round((S.bgOpacity??0.14)*100)}%</span></div></div>
+      <input type="file" id="bgFile" accept="image/*" class="hide">`;
+    B.querySelectorAll('.pill[data-k]').forEach(b=>b.onclick=()=>{
+      let v=b.dataset.v; if(b.dataset.k==='fontScale') v=parseFloat(v);
+      setS(b.dataset.k,v);
+    });
+    B.querySelectorAll('.pill[data-font]').forEach(b=>b.onclick=()=>setS('fontFamily',b.dataset.font));
+    B.querySelectorAll('.pill[data-acc]').forEach(b=>b.onclick=()=>setS('accent',b.dataset.acc));
+    B.querySelector('#fontApply').onclick=()=>{ const v=B.querySelector('#fontIn').value.trim();
+      setS('fontFamily', v?v+',sans-serif':''); toast('字体已应用'); };
+    const f=B.querySelector('#bgFile');
+    B.querySelector('#bgPick').onclick=()=>f.click();
+    f.onchange=()=>{
+      const file=f.files[0]; if(!file) return;
+      const img=new Image(), fr=new FileReader();
+      fr.onload=()=>{ img.onload=()=>{
+        const max=1600, sc=Math.min(1,max/Math.max(img.width,img.height));
+        const cv=document.createElement('canvas');
+        cv.width=img.width*sc; cv.height=img.height*sc;
+        cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
+        const data=cv.toDataURL('image/jpeg',0.82);
+        S.bgImage=data; if(!S.bgOpacity) S.bgOpacity=0.14;
+        saveCfg(); applyLook(); toast('背景已更新');
+      }; img.src=fr.result; };
+      fr.readAsDataURL(file);
+    };
+    B.querySelector('#bgClear').onclick=()=>setS('bgImage','');
+    const op=B.querySelector('#bgOp');
+    op.oninput=()=>{ const v=parseFloat(op.value);
+      B.querySelector('#bgOpV').textContent=Math.round(v*100)+'%';
+      state.cfg.settings.bgOpacity=v; applyLook(); };
+    op.onchange=()=>saveCfg();
+  }
+
+  if(state.tab==='sources'){
+    B.appendChild(el('div','tip',`全部 <b>${state.cfg.sources.length}</b> 个源都能在这里<b>开关</b>、<b>改地址</b>、<b>改条数</b>、<b>删除</b>或<b>新增</b>。
+      支持左侧<b>勾选</b>后<b>批量删除</b>；可<b>导出</b>全部源为文件、用文件<b>批量导入</b>。
+      左侧列表支持<b>拖动排序</b>；关掉开关的源会自动从左侧隐藏。改完地址点“测”可以马上验证能不能解析。`));
+    // 工具条：全选 / 批量删除 / 导出 / 导入
+    const bar=el('div','srcrow'); bar.style.justifyContent='space-between'; bar.style.background='var(--panel)';
+    bar.innerHTML=`<label style="display:flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer">
+        <input type="checkbox" id="ckAll"> 全选</label>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="mini" id="expSrc">⬇ 导出源</button>
+        <button class="mini" id="impSrc">⬆ 导入源</button>
+        <button class="mini danger" id="delSel">🗑 批量删除</button></div>
+      <input type="file" id="impFile" accept=".json,application/json" class="hide">`;
+    B.appendChild(bar);
+    const getCk=()=>[...B.querySelectorAll('input.ck:checked')].map(c=>c.dataset.id);
+    bar.querySelector('#ckAll').onchange=e=>{
+      B.querySelectorAll('input.ck').forEach(c=>c.checked=e.target.checked); syncDel();
+    };
+    const syncDel=()=>{
+      const n=getCk().length, btn=bar.querySelector('#delSel');
+      btn.textContent=n?`🗑 批量删除 (${n})`:'🗑 批量删除';
+      btn.style.opacity=n?1:.5;
+    };
+    bar.querySelector('#delSel').onclick=()=>{
+      const ids=getCk(); if(!ids.length){ toast('先勾选要删除的源'); return; }
+      if(!confirm(`确定删除选中的 ${ids.length} 个源？可在导出文件中留底。`)) return;
+      state.cfg.sources=state.cfg.sources.filter(s=>!ids.includes(s.id));
+      if(ids.includes(state.view)) state.view='all';
+      saveCfg(); renderModal(); renderSidebar(); render(); toast('已删除 '+ids.length+' 个源');
+    };
+    bar.querySelector('#expSrc').onclick=()=>{
+      const data=JSON.stringify({app:'热榜助手',version:2,exportTime:new Date().toISOString(),
+        sources:state.cfg.sources},null,2);
+      const a=el('a'); a.href=URL.createObjectURL(new Blob([data],{type:'application/json'}));
+      a.download='热榜助手源_'+new Date().toISOString().slice(0,10)+'.json'; a.click();
+      URL.revokeObjectURL(a.href); toast('已导出 '+state.cfg.sources.length+' 个源');
+    };
+    bar.querySelector('#impSrc').onclick=()=>bar.querySelector('#impFile').click();
+    bar.querySelector('#impFile').onchange=e=>{
+      const file=e.target.files[0]; if(!file) return;
+      const fr=new FileReader();
+      fr.onload=()=>{
+        try{
+          const raw=JSON.parse(fr.result);
+          const list=Array.isArray(raw)?raw:(raw.sources||[]);
+          if(!Array.isArray(list)||!list.length) throw new Error('文件里没有源数据');
+          let over=0, added=0;
+          list.forEach(item=>{
+            if(!item||!item.url) return;
+            const s={id:item.id||('u'+Date.now().toString(36)+Math.random().toString(36).slice(2,6)),
+              name:item.name||'导入源', url:item.url, parser:item.parser||'auto',
+              sel:item.sel||{}, count:parseInt(item.count,10)||30,
+              enabled:item.enabled!==false, note:item.note||'导入源', search:item.search||'',
+              cat:CATS.includes(item.cat)?item.cat:'综合'};
+            const i=state.cfg.sources.findIndex(x=>x.id===s.id);
+            if(i>=0){ state.cfg.sources[i]=s; over++; } else { state.cfg.sources.push(s); added++; }
+          });
+          saveCfg(); renderModal(); renderSidebar();
+          loadSources(state.cfg.sources.slice(-added), true);
+          render();
+          toast(`导入完成：新增 ${added} 个，覆盖 ${over} 个`);
+        }catch(err){ toast('导入失败：'+err.message); }
+      };
+      fr.readAsText(file,'utf-8');
+      e.target.value='';
+    };
+    state.cfg.sources.forEach((s,idx)=>{
+      const row=el('div','srcrow');
+      row.innerHTML=`
+        <input type="checkbox" class="ck" data-id="${esc(s.id)}" style="width:15px;height:15px;cursor:pointer;flex:none">
+        <span class="sw ${s.enabled?'on':''}" title="显示/隐藏"></span>
+        <span class="nm" title="${esc(s.note||s.name)}">${esc(s.name)}</span>
+        <span class="tag" data-a="cat" title="点击切换分类" style="flex:none;font-size:11px;padding:2px 6px;border-radius:6px;cursor:pointer;
+          background:color-mix(in srgb,var(--blue) 11%,transparent);color:var(--blue)">${esc(srcCat(s))}</span>
+        <input class="url" value="${esc(s.url)}" spellcheck="false">
+        <input class="num" type="number" min="1" max="50" value="${s.count||30}" title="显示条数（1~50）">
+        <div class="ops">
+          <button data-a="test" title="测试">测</button>
+          <button data-a="up" title="上移">↑</button>
+          <button data-a="down" title="下移">↓</button>
+          <button data-a="del" title="删除">✕</button>
+        </div>`;
+      row.querySelector('input.ck').onchange=syncDel;
+      row.querySelector('[data-a="cat"]').onclick=e=>{
+        const cur=srcCat(s), idx=CATS.indexOf(cur);
+        s.cat=CATS[(idx+1)%CATS.length];   // 点一下循环切换分类
+        e.target.textContent=s.cat; e.target.title='点击切换分类';
+        saveCfg(); renderSidebar(); render();
+      };
+      row.querySelector('.sw').onclick=()=>{ s.enabled=!s.enabled; saveCfg(); renderModal(); renderSidebar(); render();
+        if(s.enabled) loadSources([s]); };
+      row.querySelector('input.url').onchange=e=>{
+        s.url=e.target.value.trim(); saveCfg();
+        api('/api/test?url='+encodeURIComponent(s.url)+'&parser='+encodeURIComponent(s.parser))
+          .then(r=>{ toast(s.name+'：可解析 '+r.count+' 条'); loadSources([s],true); })
+          .catch(()=>toast(s.name+'：该地址解析不了，试试别的'));
+      };
+      row.querySelector('input.num').onchange=e=>{
+        let v=parseInt(e.target.value,10); if(!Number.isInteger(v))v=30; v=Math.max(1,Math.min(50,v));
+        e.target.value=v; s.count=v; saveCfg(); render(); };
+      row.querySelector('[data-a="test"]').onclick=()=>{
+        toast('测试 '+s.name+'…');
+        api('/api/test?url='+encodeURIComponent(s.url)+'&parser='+encodeURIComponent(s.parser))
+          .then(r=>toast(s.name+'：成功 '+r.count+' 条'+(r.sample[0]?'，如「'+r.sample[0].title.slice(0,16)+'」':'')))
+          .catch(()=>toast(s.name+'：解析失败'));
+      };
+      row.querySelector('[data-a="up"]').onclick=()=>{ if(idx>0){const a=state.cfg.sources;[a[idx-1],a[idx]]=[a[idx],a[idx-1]];saveCfg();renderModal();renderSidebar();} };
+      row.querySelector('[data-a="down"]').onclick=()=>{ const a=state.cfg.sources; if(idx<a.length-1){[a[idx+1],a[idx]]=[a[idx],a[idx+1]];saveCfg();renderModal();renderSidebar();} };
+      row.querySelector('[data-a="del"]').onclick=()=>{
+        if(!confirm('删除「'+s.name+'」？只影响本机显示。')) return;
+        state.cfg.sources=state.cfg.sources.filter(x=>x.id!==s.id);
+        if(state.view===s.id) state.view='all';
+        saveCfg(); renderModal(); renderSidebar(); render();
+      };
+      B.appendChild(row);
+    });
+    const add=el('button','mini','＋ 新增新闻源'); add.style.marginTop='4px';
+    add.onclick=()=>{ state.addOpen=true; renderModal(); };
+    B.appendChild(add);
+    if(state.addOpen){
+      const box=el('div','addbox');
+      box.innerHTML=`<div class="r"><input id="nName" placeholder="名称，如：我的博客热榜" style="flex:1">
+          <select id="nParser" style="width:110px">
+            <option value="auto">自动识别</option><option value="json">JSON</option><option value="html">HTML</option>
+          </select></div>
+        <div class="r"><input id="nUrl" placeholder="榜单地址 https://…" style="flex:1"></div>
+        <div class="r"><input id="nSearch" placeholder="搜索地址（可选，{q} 为关键词）" style="flex:1"></div>
+        <div class="r" style="margin-bottom:0"><button class="mini" id="nTest">先测试</button>
+          <button class="mini" id="nAdd" style="background:var(--blue);color:#fff;border-color:var(--blue);font-weight:600">添加</button>
+          <button class="mini" id="nCancel">取消</button><span id="nOut" style="font-size:12px;color:var(--sub);margin-left:6px"></span></div>`;
+      B.appendChild(box);
+      box.querySelector('#nCancel').onclick=()=>{ state.addOpen=false; renderModal(); };
+      box.querySelector('#nTest').onclick=()=>{
+        const u=box.querySelector('#nUrl').value.trim(), p=box.querySelector('#nParser').value;
+        const out=box.querySelector('#nOut');
+        if(!u){ out.textContent='先填地址'; return; }
+        out.textContent='测试中…';
+        api('/api/test?url='+encodeURIComponent(u)+'&parser='+encodeURIComponent(p))
+          .then(r=>out.innerHTML='<b style="color:var(--blue)">可以解析 '+r.count+' 条</b>')
+          .catch(()=>out.innerHTML='<span style="color:#f04438">解析失败，换个地址或改类型试试</span>');
+      };
+      box.querySelector('#nAdd').onclick=()=>{
+        const name=box.querySelector('#nName').value.trim()||'新热榜';
+        const u=box.querySelector('#nUrl').value.trim();
+        if(!u){ toast('请填写地址'); return; }
+        const id='u'+Date.now().toString(36);
+        state.cfg.sources.push({id,name,url:u,parser:box.querySelector('#nParser').value,
+          sel:{},count:30,enabled:true,note:'自定义源',search:box.querySelector('#nSearch').value.trim()});
+        state.addOpen=false; saveCfg();
+        loadSources([state.cfg.sources.find(x=>x.id===id)],true);
+        renderModal(); renderSidebar(); render(); toast('已添加「'+name+'」');
+      };
+    }
+  }
+
+  if(state.tab==='about'){
+    const qr=S.qrImage||'';
+    B.innerHTML=`
+      <div class="about">
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:12px">
+          <div class="mark" style="width:54px;height:54px;border-radius:15px">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" style="width:27px;height:27px">
+              <circle cx="10.5" cy="10.5" r="6.2"/><path d="m15.2 15.2 4.4 4.4"/></svg>
+          </div>
+          <div><div style="font-size:18px;font-weight:700;color:var(--text)">热榜助手 V4.8</div>
+            <div>作者：<b>七度</b> · 本地运行，不登录不上传</div></div>
+        </div>
+        聚合 ${state.cfg.sources.length} 个站点的热榜与资讯，全部数据来自各站点公开页面，仅在本机缓存。<br>
+        所有源都可自行开关、改地址、改条数、删除或新增；换地址后依然按该站热度排序。<br><br>
+        <div style="height:1px;background:var(--line);margin:6px 0 14px"></div>
+        <b>如果这个工具帮你省了点时间</b><br>
+        写这个小软件花了不少晚上的时间，从抓取规则到界面一点一点磨出来的。用着顺手的话，欢迎请我喝杯咖啡——
+        你的支持是我继续更新各站点解析、跟进网站改版的动力。有想加的站点或者用着不顺手的地方，也可以告诉我。<br>
+        <div style="margin-top:8px;color:var(--sub)">愿你的信息流清爽一点，别再被推荐算法牵着走。</div>
+        <div class="qrbox">
+          <div class="qrimg" id="qrBox">${qr?`<img src="${qr}" alt="微信收款码">`:'作者未设置收款码'}</div>
+          <div style="flex:1;min-width:180px">
+            <div style="font-size:12.5px;color:var(--sub);line-height:1.9">微信扫码打赏（金额随意）</div>
+          </div>
+        </div>
+        <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="mini" id="abQuit">退出程序</button>
+          <button class="mini" id="abReload">重新载入界面</button>
+          <span style="font-size:11.5px;color:var(--sub);align-self:center">配置目录：${esc(state.cfg.dataDir||'')}</span>
+        </div>
+      </div>`;
+    B.querySelector('#abQuit').onclick=()=>{ if(confirm('退出热榜助手？')){ api('/api/quit'); setTimeout(()=>window.close(),300);} };
+    B.querySelector('#abReload').onclick=()=>location.reload();
+  }
+}
+
+/* ---------------- 顶栏交互 ---------------- */
+$('#q').oninput=e=>{ state.filter=e.target.value.trim(); render(); };
+$('#q').onkeydown=e=>{
+  if(e.key==='Enter'){
+    const kw=e.target.value.trim();
+    const s = state.view==='all'? enabled()[0] : state.cfg.sources.find(x=>x.id===state.view);
+    if(s&&s.search&&kw) window.open(s.search.replace('{q}',encodeURIComponent(kw)),'_blank');
+  }
+  if(e.key==='Escape'){ e.target.value=''; state.filter=''; render(); }
+};
+$('#segLayout').querySelectorAll('button').forEach(b=>b.onclick=()=>{
+  state.layout=b.dataset.v; localStorage.setItem('hb_layout',state.layout); render();
+});
+$('#navAll').onclick=()=>{ state.view='all'; renderSidebar(); render(); };
+$('#navFav').onclick=()=>{ state.view='fav'; renderSidebar(); render(); };
+$('#navHist').onclick=()=>{ state.view='hist'; renderSidebar(); render(); };
+$('#btnRefresh').onclick=()=>refreshAll(true);
+
+document.addEventListener('keydown',e=>{
+  if(e.key==='F5'){ e.preventDefault(); refreshAll(true); }
+  if(e.key==='/'&&document.activeElement.tagName!=='INPUT'){ e.preventDefault(); $('#q').focus(); }
+  if(e.key==='Escape') closeModal();
+  if((e.key==='r'||e.key==='R')&&document.activeElement.tagName!=='INPUT'){ e.preventDefault(); $('#btnTts').click(); }
+  if((e.key==='t'||e.key==='T')&&document.activeElement.tagName!=='INPUT'){ /* 翻译功能已移除 */ }
+});
+$('#pRate').value=1;
+
+/* ---------------- 启动 ---------------- */
+let autoTimer=null;
+function setupAuto(){
+  clearInterval(autoTimer);
+  const m=state.cfg.settings.autoRefresh||0;
+  if(m>0) autoTimer=setInterval(()=>refreshAll(false),m*60000);
+}
+
+/* 启动检测：强制刷新，失败源自动隐藏，可一键恢复 */
+function startupDetect(){
+  const list=enabled();
+  if(!list.length) return;
+  loadSources(list,true).then(()=>{
+    if(state.cfg.settings.startupCheck===false) return;
+    const bad=list.filter(s=>(state.data[s.id]||{}).error);
+    if(bad.length){
+      state.autoHidden=bad.map(s=>({id:s.id,name:s.name}));
+      state.autoHiddenAt=Date.now();   // 通知条 3 秒后自动关闭
+      bad.forEach(s=>s.enabled=false);
+      saveCfg(); renderSidebar(); render();
+      toast(bad.length+' 个源启动检测失败，已自动隐藏');
+    }else{
+      state.autoHidden=[];
+    }
+  });
+}
+function restoreHidden(){
+  const list=state.autoHidden||[];
+  const back=list.map(h=>state.cfg.sources.find(s=>s.id===h.id)).filter(Boolean);
+  state.autoHidden=[];
+  back.forEach(s=>s.enabled=true);
+  saveCfg(); renderSidebar(); render();
+  if(back.length) loadSources(back,true);
+  toast('已恢复 '+back.length+' 个源');
+}
+
+api('/api/config').then(cfg=>{
+  state.cfg=cfg; state.favs=cfg.favorites||[]; state.hist=cfg.history||[];
+  const h=decodeURIComponent(location.hash||'');
+  if(h.includes('text')) cfg.settings.view='text';
+  if(h.includes('dark')) cfg.settings.theme='dark';
+  if(h.startsWith('#src:')) state.view=h.slice(5);
+  if(h.includes('fav')) state.view='fav';
+  if(h.includes('hist')) state.view='hist';
+  if(h.includes('listview')) state.layout='list';
+  // 每次打开默认：聚合热榜 · 全部分类 · 总览看板
+  state.view='all'; state.cat='全部'; state.layout='board';
+  applyLook(); applyFontFallback();
+  $('#pRate').value=cfg.settings.ttsRate||1;
+  $('#pRateV').textContent=(cfg.settings.ttsRate||1).toFixed(1)+'x';
+  renderCats(); renderSidebar(); render(); setupAuto();
+  startupDetect();   // 启动即强制刷新 + 检测失败源
+  if(h.startsWith('#set')) openModal(h.includes('sources')?'sources':(h.includes('about')?'about':(h.includes('look')?'look':'general')));
+}).catch(e=>{
+  $('#content').innerHTML=`<div class="empty"><div class="big">🔌</div>本地服务未响应<br>${esc(e.message)}</div>`;
+});
+function applyFontFallback(){}
+
+setInterval(()=>{ fetch('/api/ping').catch(()=>{}); },15000);
+</script>
+</body>
+</html>

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>热榜助手 V4.8</title>
+<title>热榜助手 V6.0</title>
 <style>
 :root{
   --bg:#f2f3f5; --panel:#ffffff; --panel2:#fafbfc; --text:#14171c; --sub:#6d7683;
@@ -90,7 +90,7 @@ svg{display:block}
 /* ---------- 主区 ---------- */
 .main{display:flex;flex-direction:column;min-width:0;min-height:0}
 .topbar{display:flex;align-items:center;gap:9px;padding:11px 18px;border-bottom:1px solid var(--line);
-  background:color-mix(in srgb,var(--panel) 72%,transparent);backdrop-filter:blur(14px)}
+  background:color-mix(in srgb,var(--panel) var(--topMix,72%),transparent);backdrop-filter:blur(14px)}
 .tb-title{font-size:17px;font-weight:700;display:flex;align-items:baseline;gap:8px;min-width:0;max-width:34%}
 .tb-title span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tb-title .n{font-size:11.5px;font-weight:500;color:var(--sub);flex:none}
@@ -172,8 +172,7 @@ svg{display:block}
 .cat-row button em{font-style:normal;opacity:.6;font-size:10.5px;margin-left:2px}
 
 /* ---- 看板视图：多列源面板（参考 rebang.today 看板） ---- */
-.bgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:25px;align-items:stretch}
-@media(max-width:1080px){.bgrid{grid-template-columns:repeat(auto-fill,minmax(252px,1fr))}}
+.bgrid{display:grid;grid-template-columns:repeat(auto-fill,340px);gap:25px;align-items:stretch;justify-content:flex-start;overflow-x:auto;padding-bottom:6px}
 .bcard{background:color-mix(in srgb,var(--panel) var(--panelMix,100%),transparent);border:1px solid var(--line);
   border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);
   height:480px;display:flex;flex-direction:column}
@@ -334,7 +333,7 @@ html[data-theme="dark"] .err-bar{color:#ffb4ab}
         </svg>
       </div>
       <div>
-        <h1>热榜助手<span class="ver">V4.8</span></h1>
+        <h1>热榜助手<span class="ver">V6.0</span></h1>
         <div class="by">作者：七度</div>
       </div>
     </div>
@@ -387,7 +386,7 @@ html[data-theme="dark"] .err-bar{color:#ffb4ab}
 <div class="player" id="player">
   <div class="pi" id="ppBtn"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="5" width="3.6" height="14" rx="1"/><rect x="13.4" y="5" width="3.6" height="14" rx="1"/></svg></div>
   <div class="tx" id="pTxt">准备朗读…</div>
-  <input type="range" id="pRate" min="0.6" max="2" step="0.1" value="1">
+  <input type="range" id="pRate" min="0.6" max="2" step="0.05" value="1.25">
   <div class="rate" id="pRateV">1.0x</div>
   <button class="mini" id="pStop">停止</button>
 </div>
@@ -405,6 +404,10 @@ html[data-theme="dark"] .err-bar{color:#ffb4ab}
   </div>
 </div>
 <div class="toast" id="toast"></div>
+<div id="qrFs" style="display:none;position:fixed;inset:0;background:rgba(10,12,16,.94);z-index:300;align-items:center;justify-content:center;flex-direction:column;gap:16px">
+  <img id="qrFsImg" alt="打赏二维码" style="max-width:76vmin;max-height:76vmin;background:#fff;padding:12px;border-radius:14px">
+  <div style="color:#eee;font-size:13px;text-align:center;line-height:1.9">长按二维码可保存到手机 / 识别打赏<br><span style="opacity:.65">点空白处关闭</span></div>
+</div>
 
 <script>
 const $ = s => document.querySelector(s);
@@ -473,11 +476,13 @@ function applyLook(){
   if(s.bgImage){
     document.documentElement.style.setProperty('--bgimg',`url("${s.bgImage}")`);
     document.documentElement.style.setProperty('--bgop',(s.bgOpacity??0.14));
-    // 新闻框跟随背景浓度变得半透明，让背景图透进框里
+    // 新闻框与顶栏跟随背景浓度变得半透明，让背景图透进来
     document.documentElement.style.setProperty('--panelMix',Math.round((1-(s.bgOpacity??0.14))*100)+'%');
+    document.documentElement.style.setProperty('--topMix',Math.round((1-(s.bgOpacity??0.14))*72)+'%');
   }else{
     document.documentElement.style.setProperty('--bgimg','none');
     document.documentElement.style.setProperty('--panelMix','100%');
+    document.documentElement.style.setProperty('--topMix','72%');
   }
 }
 
@@ -675,12 +680,12 @@ function render(){
 
   // 失败源提示
   if(agg){
-    if(state.autoHidden&&state.autoHidden.length&&(!state.autoHiddenAt||Date.now()-state.autoHiddenAt<=3000)){
+    if(state.autoHidden&&state.autoHidden.length&&(!state.autoHiddenAt||Date.now()-state.autoHiddenAt<=4000)){
       const bar=el('div','err-bar',`<span>🛰 本次启动有 ${state.autoHidden.length} 个源没抓到数据，已自动隐藏：${esc(state.autoHidden.slice(0,4).map(h=>h.name).join('、'))}${state.autoHidden.length>4?' 等':''}</span><button>恢复显示</button>`);
       bar.querySelector('button').onclick=restoreHidden;
       c.appendChild(bar);
       clearTimeout(state._ahT);
-      state._ahT=setTimeout(()=>render(),3100);   // 3 秒后自动关闭
+      state._ahT=setTimeout(()=>render(),4100);   // 4 秒后自动关闭
     }
     const errs=enabled().filter(s=>(state.data[s.id]||{}).error);
     if(state.cfg.settings.showOnlyOk && errs.length){
@@ -689,13 +694,13 @@ function render(){
       c.appendChild(bar);
     }
   }
-  if(state.view==='fav'&&!items.length){
-    c.innerHTML='<div class="empty"><div class="big">⭐</div>还没有收藏<br>把鼠标移到新闻上，点右侧星标即可收藏</div>'; return;
+  if(state.view==='fav'&&!items.length&&!state.filter){
+    c.innerHTML='<div class="empty"><div class="big">⭐</div>还没有收藏<br>点新闻右侧的星标即可收藏</div>'; return;
   }
-  if(state.view==='hist'&&!items.length){
+  if(state.view==='hist'&&!items.length&&!state.filter){
     c.innerHTML='<div class="empty"><div class="big">🕘</div>还没有浏览记录<br>点开任意新闻后会自动记录</div>'; return;
   }
-  if(isRegion&&!items.length){
+  if(isRegion&&!items.length&&!state.filter){
     const set=state.cfg.settings.region||'';
     c.innerHTML=`<div class="empty"><div class="big">📍</div>${set
       ?('地区「'+esc(set)+'」暂时没抓到新闻，点右上角刷新试试')
@@ -718,8 +723,8 @@ function render(){
     bind(c); return;
   }
   if(agg){
-    // 总览看板：每个源一个独立面板，固定大小、内部滚动铺满；每源默认 15 条；搜索关键词同样过滤看板条目
-    const bc=Math.max(1,Math.min(50,parseInt(state.cfg.settings.boardCount,10)||15));
+    // 总览看板：每个源一个独立面板，固定大小、内部滚动铺满；每源默认 10 条；搜索关键词同样过滤看板条目
+    const bc=Math.max(1,Math.min(50,parseInt(state.cfg.settings.boardCount,10)||10));
     const g=el('div','bgrid');
     const srcs=enabledInCat().filter(s=>(state.data[s.id]||{items:[]}).items.some(match));
     g.innerHTML=srcs.map(s=>{
@@ -786,8 +791,12 @@ function toggleFav(it){
 }
 function share(it){
   const txt=`${it.title} ${it.url||''}`.trim();
+  /* 安卓 App：调系统分享面板（可选微信好友/朋友圈） */
+  if(window.RebangNative&&window.RebangNative.share){
+    try{ window.RebangNative.share(it.title||'', it.url||''); return; }catch(e){}
+  }
   if(navigator.share){ navigator.share({title:it.title,url:it.url}).catch(()=>{}); return; }
-  if(navigator.clipboard) navigator.clipboard.writeText(txt).then(()=>toast('已复制，可直接发给好友')).catch(()=>toast('复制失败'));
+  if(navigator.clipboard) navigator.clipboard.writeText(txt).then(()=>toast('已复制，可粘贴发给微信好友')).catch(()=>toast('复制失败'));
   else toast('复制失败');
 }
 let histTimer=null, histBuf=[];
@@ -804,58 +813,155 @@ function pushHistory(it){
 
 /* ---------------- 朗读 ---------------- */
 const sp=state.speak;
+/* 安卓 App 内用原生 TTS 桥（WebView 不带 speechSynthesis）；浏览器走 Web Speech */
+const hasNativeTts=()=>!!(window.RebangNative&&window.RebangNative.speak);
+function updateSpeakUI(){
+  if(sp.i>=sp.list.length) return;
+  const it=sp.list[sp.i];
+  $('#pTxt').textContent= it._board
+    ? '('+it.srcName+' '+it._no+'/'+it._cnt+') '+it.title
+    : '('+(sp.i+1)+'/'+sp.list.length+') '+it.title;
+  highlightSpeaking(it);
+}
+function highlightSpeaking(it){
+  document.querySelectorAll('.speaking').forEach(n=>n.classList.remove('speaking'));
+  let n=document.querySelector(`[data-idx="${it._i}"]`);
+  if(!n&&it._board){   // 看板条目没有 data-idx，按 标题+源名 定位面板里的行
+    document.querySelectorAll('.bitem').forEach(b=>{
+      if(!n&&b.dataset.tt===it.title&&b.dataset.src===it.srcName) n=b;
+    });
+  }
+  if(n){ n.classList.add('speaking'); n.scrollIntoView({block:'center',behavior:'smooth'}); }
+}
+const ttsRate=()=>parseFloat(state.cfg.settings.ttsRate||1.25);
+function speakText(text){
+  sp._lastText=text;
+  /* 第一优先：原生壳 TTS（安卓 App） */
+  if(hasNativeTts() && window._nativeDead!==true){
+    let ok=false;
+    try{ ok=window.RebangNative.speak(text, String(sp.i), ttsRate())===true; }catch(e){}
+    if(ok){ sp._native=true; return; }
+    window._nativeDead=true;
+  }
+  sp._native=false;
+  /* 桌面壳(WebView2)的 Web Speech 只触发事件不出声 → 优先用本机后端系统语音(SAPI/在线语音)真正发声 */
+  if(window._btts!==false){ btSpeak(text); return; }
+  onlineAudio(text);
+}
+window._nativeTtsState=ok=>{
+  if(!ok){
+    window._nativeDead=true;
+    if(sp.on && sp._native){ sp._native=false; toast('本机无语音引擎，改用在线朗读'); onlineAudio(sp._lastText||''); }
+  }
+};
+/* 在线朗读兜底：<audio> 播放后端 edge-tts 合成的 mp3 */
+function onlineAudio(text){
+  if(window._audioDead===true){ webSpeak(text); return; }
+  try{
+    if(sp._au){ try{ sp._au.pause(); }catch(e){} sp._au=null; }
+    const a=new Audio('/api/tts/audio?text='+encodeURIComponent(text)+'&rate='+ttsRate());
+    sp._au=a; sp.cur=a; sp._native=false;
+    a.onended=()=>{ if(sp.on && sp.cur===a) window._ttsNext(); };          // 读完 → 下一条
+    a.onerror=()=>{ if(sp.on && sp.cur===a){ window._audioDead=true; webSpeak(text); } };
+    const p=a.play();
+    if(p && p.catch) p.catch(()=>{ if(sp.on && sp.cur===a){ window._audioDead=true; webSpeak(text); } });
+  }catch(e){ window._audioDead=true; webSpeak(text); }
+}
+function btSpeak(text){
+  clearTimeout(sp._poll);
+  fetch('/api/tts/speak',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({text:text,rate:ttsRate()})}).then(r=>r.json()).then(j=>{
+    if(!j||!j.ok){ window._btts=false; onlineAudio(text); return; }
+    const poll=()=>{ sp._poll=setTimeout(()=>{
+      fetch('/api/tts/status').then(r=>r.json()).then(s=>{
+        if(!sp.on) return;                      // 用户已停止
+        if(s.err){ window._btts=false; toast('语音引擎异常：'+s.err+'，已切换备用朗读'); onlineAudio(text); return; }
+        if(!s.speaking){ window._ttsNext(); }   // 本条读完 → 下一条
+        else poll();
+      }).catch(()=>{ if(sp.on) window._ttsNext(); });
+    },260); };
+    poll();
+  }).catch(()=>{ window._btts=false; onlineAudio(text); });
+}
+function webSpeak(text){
+  speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance();
+  u.rate=ttsRate();
+  u.lang='zh-CN';
+  sp.cur=u;  // 标记当前语音，忽略被 cancel 的旧回调
+  u.onend=()=>{ if(!sp.on||sp.cur!==u) return; window._ttsNext(); };
+  u.onerror=(e)=>{ if(!sp.on||sp.cur!==u) return; if(e&&(e.error==='interrupted'||e.error==='canceled')) return; window._ttsNext(); };
+  u.text=text;
+  speechSynthesis.speak(u);
+}
+/* 组朗读队列：看板模式按面板顺序逐源朗读（每源前 10 条，读完一源再读下一源）；其余视图读当前列表 */
+function buildSpeakList(){
+  const isBoard = state.layout==='board' && state.view==='all' && state.cat!=='__top' && state.cat!=='__region';
+  if(!isBoard) return currentList().filter(match);
+  const out=[];
+  enabledInCat().forEach(s=>{
+    const d=state.data[s.id]||{};
+    const fm=(d.items||[]).filter(match).slice(0,10);
+    fm.forEach((it,i)=>out.push(Object.assign({},it,{srcName:s.name,srcId:s.id,
+      _board:true,_lead:i===0,_no:i+1,_cnt:fm.length,_i:out.length})));
+  });
+  return out;
+}
 function speakCurrent(cont){
-  if(!('speechSynthesis' in window)){ toast('当前浏览器不支持朗读'); return; }
-  if(!cont){  // 全新开始：重建队列；cont=true 表示上一条读完自动续播
-    const list=currentList().filter(match).slice(0,60);
+  if(!('speechSynthesis' in window)&&!hasNativeTts()){ toast('当前环境不支持朗读'); return; }
+  if(!cont){  // 全新开始：重建队列
+    const list=buildSpeakList();
     if(!list.length){ toast('本页没有可朗读的标题'); return; }
     sp.list=list; sp.i=0; sp.on=true; sp.paused=false;
     $('#player').classList.add('on');
   }
   if(!sp.on) return;
+  if(sp.i>=sp.list.length){ stopSpeak(); toast('已读完本页看板'); return; }
+  const it=sp.list[sp.i];
+  updateSpeakUI();
+  const num=it._board ? it._no : (sp.i+1);
+  speakText((it._board&&it._lead ? it.srcName+'。' : '')+num+'，'+it.title);
+}
+/* 原生 TTS 每读完全部内容回调一次，推进到下一条 */
+window._ttsNext=()=>{
+  if(!sp.on) return;
+  sp.i++;
   if(sp.i>=sp.list.length){ stopSpeak(); toast('本页已读完'); return; }
-  speechSynthesis.cancel();
-  const u=new SpeechSynthesisUtterance();
-  u.rate=parseFloat(state.cfg.settings.ttsRate||1);
-  u.lang='zh-CN';
-  sp.cur=u;  // 标记当前语音，忽略被 cancel 的旧回调
-  u.onend=()=>{
-    if(!sp.on||sp.cur!==u) return;
-    sp.i++;
-    setTimeout(()=>speakCurrent(true),150);
-  };
-  u.onerror=(e)=>{ if(!sp.on||sp.cur!==u) return; if(e&&e.error==='interrupted'||e&&e.error==='canceled') return;
-    sp.i++; setTimeout(()=>speakCurrent(true),150); };
-  u.text='第 '+(sp.i+1)+' 条。'+sp.list[sp.i].title;
-  $('#pTxt').textContent='('+(sp.i+1)+'/'+sp.list.length+') '+sp.list[sp.i].title;
-  highlightSpeaking(sp.list[sp.i]);
-  speechSynthesis.speak(u);
-}
-function highlightSpeaking(it){
-  document.querySelectorAll('.speaking').forEach(n=>n.classList.remove('speaking'));
-  const n=document.querySelector(`[data-idx="${it._i}"]`);
-  if(n){ n.classList.add('speaking'); n.scrollIntoView({block:'center',behavior:'smooth'}); }
-}
+  setTimeout(()=>{ if(sp.on) speakCurrent(true); },150);
+};
 function stopSpeak(){
   sp.on=false; sp.paused=false; sp.cur=null;
+  clearTimeout(sp._poll);
+  if(sp._au){ try{ sp._au.pause(); }catch(e){} sp._au=null; }
+  fetch('/api/tts/stop',{method:'POST'}).catch(()=>{});
   try{ speechSynthesis.cancel(); }catch(e){}
+  if(hasNativeTts()){ try{ window.RebangNative.stopSpeak(); }catch(e){} }
   $('#player').classList.remove('on');
   document.querySelectorAll('.speaking').forEach(n=>n.classList.remove('speaking'));
 }
 $('#btnTts').onclick=()=>{
-  if(sp.on && !sp.paused){ speechSynthesis.pause(); sp.paused=true;
+  if(sp.on && !sp.paused){
+    if(hasNativeTts()){ try{ window.RebangNative.pauseSpeak(); }catch(e){} }
+    else if(window._btts!==false){ clearTimeout(sp._poll); fetch('/api/tts/stop',{method:'POST'}).catch(()=>{}); }
+    else speechSynthesis.pause();
+    sp.paused=true;
     $('#ppBtn').innerHTML='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>'; return; }
-  if(sp.on && sp.paused){ speechSynthesis.resume(); sp.paused=false;
-    $('#ppBtn').innerHTML='<svg viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="5" width="3.6" height="14" rx="1"/><rect x="13.4" y="5" width="3.6" height="14" rx="1"/></svg>'; return; }
+  if(sp.on && sp.paused){
+    sp.paused=false;
+    if(hasNativeTts()){ speakCurrent(true); }  // 原生不支持暂停，从当前条重读
+    else if(window._btts!==false){ speakCurrent(true); }  // 后端语音同理，从当前条重读
+    else { speechSynthesis.resume();
+      $('#ppBtn').innerHTML='<svg viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="5" width="3.6" height="14" rx="1"/><rect x="13.4" y="5" width="3.6" height="14" rx="1"/></svg>'; }
+    return; }
   speakCurrent();
 };
 $('#ppBtn').onclick=()=>$('#btnTts').click();
 $('#pStop').onclick=stopSpeak;
 $('#pRate').oninput=e=>{
   const v=parseFloat(e.target.value);
-  $('#pRateV').textContent=v.toFixed(1)+'x';
+  $('#pRateV').textContent=(v===1.25?'1.25':v.toFixed(1))+'x';
   state.cfg.settings.ttsRate=v; saveCfg();
-  if(sp.on){ speechSynthesis.cancel(); clearTimeout(sp._rt);
+  if(sp.on){ if(!hasNativeTts()) speechSynthesis.cancel(); clearTimeout(sp._rt);
     sp._rt=setTimeout(()=>{ if(sp.on) speakCurrent(true); },120); }
 };
 
@@ -902,7 +1008,7 @@ function renderModal(){
           <button class="pill ${S.openMode!=='browser'?'on':''}" data-k="openMode" data-v="app">独立窗口</button>
           <button class="pill ${S.openMode==='browser'?'on':''}" data-k="openMode" data-v="browser">默认浏览器</button></div></div>
       <div class="field"><div class="lb">朗读语速</div>
-        <div class="ctl">${[0.8,1,1.2,1.5,1.8].map(n=>`<button class="pill ${Math.abs((S.ttsRate||1)-n)<0.01?'on':''}" data-k="ttsRate" data-v="${n}">${n.toFixed(1)}x</button>`).join('')}</div></div>
+        <div class="ctl">${[0.8,1,1.25,1.5,1.8].map(n=>`<button class="pill ${Math.abs((S.ttsRate||1.25)-n)<0.01?'on':''}" data-k="ttsRate" data-v="${n}">${n===1.25?'1.25':n.toFixed(1)}x</button>`).join('')}</div></div>
       <div class="field"><div class="lb">启动自动检测<div class="hint">每次打开软件先强制刷新全部源，没抓到数据的自动隐藏</div></div>
         <div class="ctl">
           <button class="pill ${S.startupCheck!==false?'on':''}" data-k="startupCheck" data-v="1">开启</button>
@@ -942,6 +1048,8 @@ function renderModal(){
   }
 
   if(state.tab==='look'){
+    const accents=[['','经典红'],['blue','清爽蓝'],['green','自然绿'],['violet','优雅紫'],
+      ['cyan','湖光青'],['rose','玫瑰粉'],['amber','暖阳橙']];
     const fonts=[
       ['','系统默认'],['"Microsoft YaHei","微软雅黑",sans-serif','微软雅黑'],
       ['"DengXian","等线",sans-serif','等线'],['SimSun,"宋体",serif','宋体'],
@@ -951,8 +1059,6 @@ function renderModal(){
       ['"HarmonyOS Sans SC",sans-serif','鸿蒙黑体'],['"Segoe UI",system-ui,sans-serif','Segoe UI'],
       ['Arial,sans-serif','Arial'],['"Times New Roman",serif','Times New Roman'],
     ];
-    const accents=[['','经典红'],['blue','清爽蓝'],['green','自然绿'],['violet','优雅紫'],
-      ['cyan','湖光青'],['rose','玫瑰粉'],['amber','暖阳橙']];
     B.innerHTML=`
       <div class="field"><div class="lb">主题</div>
         <div class="ctl">
@@ -962,32 +1068,37 @@ function renderModal(){
         <div class="ctl">
           ${accents.map(([v,t])=>`<button class="pill ${(S.accent||'')===v?'on':''}" data-acc="${v}">${t}</button>`).join('')}
         </div></div>
-      <div class="field"><div class="lb">界面字体<div class="hint">均为 Windows 常规自带字体</div></div>
-        <div class="ctl" style="max-width:70%">
+      <div class="field"><div class="lb">字号<div class="hint">点击立即生效，正文/标题/热度同步缩放</div></div>
+        <div class="ctl">${[['0.9','小'],['1','标准'],['1.2','大'],['1.4','特大']].map(([v,t])=>`<button class="pill ${String(S.fontScale)==v?'on':''}" data-k="fontScale" data-v="${v}">${t}</button>`).join('')}</div></div>
+      <div class="field"><div class="lb">界面字体<div class="hint">均为 Windows 常规自带字体，点击立即生效</div></div>
+        <div class="ctl" style="flex-wrap:wrap;max-width:72%">
           ${fonts.map(([v,t])=>`<button class="pill ${(S.fontFamily||'')===v?'on':''}" data-font="${esc(v)}">${t}</button>`).join('')}
         </div></div>
-      <div class="field"><div class="lb">自定义字体<div class="hint">填系统里已装的字体名，如 微软雅黑</div></div>
+      <div class="field"><div class="lb">自定义字体<div class="hint">填系统里已装的字体名，如 微软雅黑；留空恢复默认</div></div>
         <div class="ctl"><input id="fontIn" class="mini" style="width:190px;padding:6px 9px" placeholder="字体名称" value="${esc(S.fontFamily||'')}">
           <button class="mini" id="fontApply">应用</button></div></div>
-      <div class="field"><div class="lb">字号</div>
-        <div class="ctl">${[['0.92','小'],['1','标准'],['1.08','大'],['1.16','特大']].map(([v,t])=>`<button class="pill ${String(S.fontScale)==v?'on':''}" data-k="fontScale" data-v="${v}">${t}</button>`).join('')}</div></div>
       <div class="field"><div class="lb">背景图片<div class="hint">选一张本地图片做背景，建议浅色或低对比</div></div>
         <div class="ctl">
           <button class="mini" id="bgPick">选择图片</button>
           <button class="mini danger" id="bgClear">清除</button>
         </div></div>
-      <div class="field"><div class="lb">背景浓度</div>
-        <div class="ctl"><input type="range" id="bgOp" min="0" max="0.6" step="0.02" value="${S.bgOpacity??0.14}" style="width:170px;accent-color:var(--blue)">
+      <div class="field"><div class="lb">背景透明度<div class="hint">新闻框与顶栏透出背景图的程度，0~100%</div></div>
+        <div class="ctl"><input type="range" id="bgOp" min="0" max="1" step="0.01" value="${S.bgOpacity??0.14}" style="width:170px;accent-color:var(--blue)">
           <span id="bgOpV" style="font-size:12px;color:var(--sub)">${Math.round((S.bgOpacity??0.14)*100)}%</span></div></div>
       <input type="file" id="bgFile" accept="image/*" class="hide">`;
     B.querySelectorAll('.pill[data-k]').forEach(b=>b.onclick=()=>{
       let v=b.dataset.v; if(b.dataset.k==='fontScale') v=parseFloat(v);
       setS(b.dataset.k,v);
+      toast(b.dataset.k==='fontScale'?'字号已调整：'+b.textContent:'设置已保存');
     });
-    B.querySelectorAll('.pill[data-font]').forEach(b=>b.onclick=()=>setS('fontFamily',b.dataset.font));
     B.querySelectorAll('.pill[data-acc]').forEach(b=>b.onclick=()=>setS('accent',b.dataset.acc));
-    B.querySelector('#fontApply').onclick=()=>{ const v=B.querySelector('#fontIn').value.trim();
-      setS('fontFamily', v?v+',sans-serif':''); toast('字体已应用'); };
+    B.querySelectorAll('.pill[data-font]').forEach(b=>b.onclick=()=>{
+      setS('fontFamily',b.dataset.font); toast('字体已切换：'+b.textContent);
+    });
+    B.querySelector('#fontApply').onclick=()=>{
+      const v=B.querySelector('#fontIn').value.trim();
+      setS('fontFamily', v?v+',sans-serif':''); toast('字体已应用');
+    };
     const f=B.querySelector('#bgFile');
     B.querySelector('#bgPick').onclick=()=>f.click();
     f.onchange=()=>{
@@ -1078,6 +1189,36 @@ function renderModal(){
       fr.readAsText(file,'utf-8');
       e.target.value='';
     };
+    /* 工具栏：一键全开 + 锁定新闻源 */
+    const locked=!!state.cfg.settings.srcLocked;
+    const tbar=el('div'); tbar.style.cssText='display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:2px 0 10px';
+    tbar.innerHTML=`<button class="mini primary" id="srcAllOn"${locked?' disabled style="opacity:.5;cursor:not-allowed"':''}>⚡ 一键全开</button>
+      <button class="mini" id="srcDefaults"${locked?' disabled style="opacity:.5;cursor:not-allowed"':''}>📥 一键载入默认源</button>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text);cursor:pointer;user-select:none">
+        <input type="checkbox" id="srcLock"${locked?' checked':''} style="width:15px;height:15px;cursor:pointer"> 🔒 锁定新闻源</label>
+      <span style="color:var(--sub);font-size:11.5px">锁定后源开关不可改，失败源也不会被自动隐藏</span>`;
+    B.appendChild(tbar);
+    tbar.querySelector('#srcDefaults').onclick=()=>{
+      if(state.cfg.settings.srcLocked){ toast('新闻源已锁定，先关闭「锁定新闻源」'); return; }
+      api('/api/default_sources').then(r=>{
+        const have=new Set(state.cfg.sources.map(s=>s.id));
+        const add=(r.sources||[]).filter(s=>!have.has(s.id)).map(s=>Object.assign({},s,{enabled:true}));
+        if(!add.length){ toast('内置默认源都已存在，无需载入'); return; }
+        state.cfg.sources=state.cfg.sources.concat(add);
+        saveCfg(); renderModal(); renderSidebar(); loadSources(add,true); render();
+        toast('已载入 '+add.length+' 个默认源');
+      }).catch(()=>toast('载入默认源失败，请重试'));
+    };
+    tbar.querySelector('#srcAllOn').onclick=()=>{
+      if(state.cfg.settings.srcLocked){ toast('新闻源已锁定，先关闭「锁定新闻源」'); return; }
+      state.cfg.sources.forEach(s=>s.enabled=true);
+      saveCfg(); renderModal(); renderSidebar(); render();
+      toast('已全部开启 '+state.cfg.sources.length+' 个源');
+    };
+    tbar.querySelector('#srcLock').onchange=e=>{
+      state.cfg.settings.srcLocked=e.target.checked; saveCfg(); renderModal();
+      toast(e.target.checked?'已锁定：源开关不可修改，失败源不再自动隐藏':'已解锁，可以修改源开关');
+    };
     state.cfg.sources.forEach((s,idx)=>{
       const row=el('div','srcrow');
       row.innerHTML=`
@@ -1101,7 +1242,8 @@ function renderModal(){
         e.target.textContent=s.cat; e.target.title='点击切换分类';
         saveCfg(); renderSidebar(); render();
       };
-      row.querySelector('.sw').onclick=()=>{ s.enabled=!s.enabled; saveCfg(); renderModal(); renderSidebar(); render();
+      row.querySelector('.sw').onclick=()=>{ if(state.cfg.settings.srcLocked){ toast('新闻源已锁定，先关闭「锁定新闻源」'); return; }
+        s.enabled=!s.enabled; saveCfg(); renderModal(); renderSidebar(); render();
         if(s.enabled) loadSources([s]); };
       row.querySelector('input.url').onchange=e=>{
         s.url=e.target.value.trim(); saveCfg();
@@ -1176,7 +1318,7 @@ function renderModal(){
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" style="width:27px;height:27px">
               <circle cx="10.5" cy="10.5" r="6.2"/><path d="m15.2 15.2 4.4 4.4"/></svg>
           </div>
-          <div><div style="font-size:18px;font-weight:700;color:var(--text)">热榜助手 V4.8</div>
+          <div><div style="font-size:18px;font-weight:700;color:var(--text)">热榜助手 V6.0</div>
             <div>作者：<b>七度</b> · 本地运行，不登录不上传</div></div>
         </div>
         聚合 ${state.cfg.sources.length} 个站点的热榜与资讯，全部数据来自各站点公开页面，仅在本机缓存。<br>
@@ -1189,7 +1331,7 @@ function renderModal(){
         <div class="qrbox">
           <div class="qrimg" id="qrBox">${qr?`<img src="${qr}" alt="微信收款码">`:'作者未设置收款码'}</div>
           <div style="flex:1;min-width:180px">
-            <div style="font-size:12.5px;color:var(--sub);line-height:1.9">微信扫码打赏（金额随意）</div>
+            <div style="font-size:12.5px;color:var(--sub);line-height:1.9">微信扫码打赏（金额随意）<br>点击二维码可放大，长按可保存</div>
           </div>
         </div>
         <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
@@ -1245,9 +1387,12 @@ function startupDetect(){
   loadSources(list,true).then(()=>{
     if(state.cfg.settings.startupCheck===false) return;
     const bad=list.filter(s=>(state.data[s.id]||{}).error);
-    if(bad.length){
+    if(bad.length && state.cfg.settings.srcLocked){
+      state.autoHidden=[];   // 锁定模式下不自动隐藏，只提示
+      toast(bad.length+' 个源启动检测失败（已锁定，未自动隐藏）');
+    }else if(bad.length){
       state.autoHidden=bad.map(s=>({id:s.id,name:s.name}));
-      state.autoHiddenAt=Date.now();   // 通知条 3 秒后自动关闭
+      state.autoHiddenAt=Date.now();   // 通知条 4 秒后自动关闭
       bad.forEach(s=>s.enabled=false);
       saveCfg(); renderSidebar(); render();
       toast(bad.length+' 个源启动检测失败，已自动隐藏');
@@ -1268,6 +1413,18 @@ function restoreHidden(){
 
 api('/api/config').then(cfg=>{
   state.cfg=cfg; state.favs=cfg.favorites||[]; state.hist=cfg.history||[];
+  /* 一次性迁移：默认每源条数 / 看板条数改为 10（仅当还是旧默认值时） */
+  if(!localStorage.getItem('hb_vc5')){
+    const S=state.cfg.settings;
+    if(+S.perSource===30){ S.perSource=10; state.cfg.sources.forEach(s=>{ s.count=10; }); }
+    if(!S.boardCount||+S.boardCount===15) S.boardCount=10;
+    localStorage.setItem('hb_vc5','1'); saveCfg();
+  }
+  if(!localStorage.getItem('hb_vc51')){   // V6.0：默认读速 1 → 1.25 倍（老用户一次性迁移）
+    const S=state.cfg.settings;
+    if(+S.ttsRate===1) S.ttsRate=1.25;
+    localStorage.setItem('hb_vc51','1'); saveCfg();
+  }
   const h=decodeURIComponent(location.hash||'');
   if(h.includes('text')) cfg.settings.view='text';
   if(h.includes('dark')) cfg.settings.theme='dark';
@@ -1278,8 +1435,8 @@ api('/api/config').then(cfg=>{
   // 每次打开默认：聚合热榜 · 全部分类 · 总览看板
   state.view='all'; state.cat='全部'; state.layout='board';
   applyLook(); applyFontFallback();
-  $('#pRate').value=cfg.settings.ttsRate||1;
-  $('#pRateV').textContent=(cfg.settings.ttsRate||1).toFixed(1)+'x';
+  $('#pRate').value=cfg.settings.ttsRate||1.25;
+  $('#pRateV').textContent=((v)=>v===1.25?'1.25':v.toFixed(1))(cfg.settings.ttsRate||1.25)+'x';
   renderCats(); renderSidebar(); render(); setupAuto();
   startupDetect();   // 启动即强制刷新 + 检测失败源
   if(h.startsWith('#set')) openModal(h.includes('sources')?'sources':(h.includes('about')?'about':(h.includes('look')?'look':'general')));
@@ -1287,6 +1444,27 @@ api('/api/config').then(cfg=>{
   $('#content').innerHTML=`<div class="empty"><div class="big">🔌</div>本地服务未响应<br>${esc(e.message)}</div>`;
 });
 function applyFontFallback(){}
+
+/* 打赏二维码：点击全屏，长按保存到手机 */
+document.addEventListener('click',e=>{
+  const box=e.target.closest('#qrBox');
+  if(box&&state.cfg&&state.cfg.settings&&state.cfg.settings.qrImage){
+    $('#qrFsImg').src=state.cfg.settings.qrImage;
+    $('#qrFs').style.display='flex';
+  }
+});
+$('#qrFs').addEventListener('click',e=>{
+  if(e.target.id!=='qrFsImg') $('#qrFs').style.display='none';
+});
+$('#qrFsImg').addEventListener('contextmenu',e=>{
+  e.preventDefault();
+  const qr=(state.cfg&&state.cfg.settings&&state.cfg.settings.qrImage)||'';
+  if(!qr) return;
+  if(window.RebangNative&&window.RebangNative.saveImage){
+    try{ window.RebangNative.saveImage(qr,'热榜助手打赏码.png'); return; }catch(err){}
+  }
+  const a=el('a'); a.href=qr; a.download='热榜助手打赏码.png'; a.click();
+});
 
 setInterval(()=>{ fetch('/api/ping').catch(()=>{}); },15000);
 </script>

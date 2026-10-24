@@ -16,6 +16,7 @@ import json
 import os
 import re
 import socket
+import subprocess
 import sys
 import threading
 import time
@@ -27,7 +28,7 @@ from html.parser import HTMLParser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 APP_NAME = "热榜助手"
-APP_VER = "4.8"
+APP_VER = "6.0"
 AUTHOR = "七度"
 
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -260,20 +261,23 @@ DEFAULT_SOURCES = [
 DEFAULT_SETTINGS = {
     "view": "image",         # image / text
     "theme": "light",        # light / dark
-    "perSource": 30,         # 全局每源条数（源可单独覆盖）
+    "perSource": 10,         # 全局每源条数（源可单独覆盖）
     "autoRefresh": 10,       # 分钟，0=关闭
     "fontFamily": "",        # 空=系统默认
     "fontScale": 1.0,
     "bgImage": "",           # 背景图（本地文件路径或 data URL）
     "bgOpacity": 0.14,
     "closeAction": "tray",   # tray=关闭退到托盘, exit=直接退出
-    "ttsRate": 1.0,
+    "ttsRate": 1.25,
     "sortAgg": "heat",
     "openMode": "app",
     "showOnlyOk": True,      # 仅显示抓取成功的源
     "startupCheck": True,    # 启动时强制刷新并自动隐藏失败源
     "accent": "",            # 主题配色：空=经典红 / blue / green / violet / cyan / rose / amber
     "translate": "auto",
+    "region": "",            # 地区新闻：省份或「省份 城市」，空=关闭
+    "boardCount": 10,        # 总览看板每源条数
+    "srcLocked": False,      # 锁定新闻源：开关不可改，失败源不自动隐藏
 }
 
 
@@ -2530,6 +2534,25 @@ class Handler(BaseHTTPRequestHandler):
                 pid = qs.get("parser", ["auto"])[0]
                 items = run_parser({"url": url, "parser": pid}, url)
                 self._json({"ok": True, "count": len(items), "sample": items[:5]})
+            elif path == "/api/default_sources":
+                self._json({"ok": True, "sources": deep_copy(DEFAULT_SOURCES)})
+            elif path == "/api/tts/audio":
+                # 手机端在线朗读：云端合成 mp3 → WebView <audio> 播放（双保险的第二条路）
+                text = qs.get("text", [""])[0][:600]
+                try:
+                    rate = float(qs.get("rate", ["1.0"])[0])
+                except Exception:
+                    rate = 1.0
+                data = tts_synth_mp3(text, rate) if text else None
+                if data:
+                    self.send_response(200)
+                    self.send_header("Content-Type", "audio/mpeg")
+                    self.send_header("Content-Length", str(len(data)))
+                    self.send_header("Cache-Control", "no-store")
+                    self.end_headers()
+                    self.wfile.write(data)
+                else:
+                    self._json({"ok": False, "error": "在线语音不可用"}, code=503)
             elif path == "/api/fav":
                 self._json({"ok": True, "favorites": CFG.favorites})
             elif path == "/api/history":
@@ -2543,6 +2566,12 @@ class Handler(BaseHTTPRequestHandler):
                     self._send(404, b"", "image/png")
                     return
                 self._send(200, got[0], got[1], {"Cache-Control": "public, max-age=3600"})
+            elif path == "/api/tts/status":
+                with _TTS_LOCK:
+                    p = _TTS["proc"]
+                self._json({"ok": sys.platform == "win32",
+                            "speaking": bool(_TTS.get("playing") or (p and p.poll() is None)),
+                            "err": _TTS.get("err", ""), "engine": _TTS.get("engine", "")})
             elif path == "/api/ping":
                 WATCH.touch()
                 self._json({"ok": True, "tray": bool(TRAY and TRAY.ok),
@@ -2599,6 +2628,26 @@ class Handler(BaseHTTPRequestHandler):
                 CFG.history = []
                 CFG.save()
                 self._json({"ok": True})
+            elif p.path == "/api/tts/speak":
+                if sys.platform != "win32":
+                    self._json({"ok": False, "error": "no-playback"})
+                else:
+                    text = str(body.get("text") or "")[:600]
+                    try:
+                        rate = float(body.get("rate") or 1.0)
+                    except Exception:
+                        rate = 1.0
+                    sapi = int(max(-10, min(10, round((rate - 1.0) * 6))))
+                    _tts_kill()
+                    with _TTS_LOCK:
+                        gen = _TTS["gen"]
+                    log("TTS speak 请求: rate=%s len=%d" % (rate, len(text)))
+                    threading.Thread(target=_tts_run, args=(gen, text, sapi, rate),
+                                     daemon=True).start()
+                    self._json({"ok": True})
+            elif p.path == "/api/tts/stop":
+                _tts_kill()
+                self._json({"ok": True})
             elif p.path == "/api/quit":
                 self._json({"ok": True})
                 threading.Thread(target=shutdown_server, daemon=True).start()
@@ -2639,6 +2688,213 @@ HTTPD = None
 TRAY = None
 
 
+# ---------------- 语音朗读（本机 SAPI → 微软在线语音 edge-tts → PowerShell 兜底） ----------------
+# 本机可能没装任何 TTS 语音库（SAPI5/OneCore 语音数为 0 时 Web Speech 和 SAPI 都无声），
+# 此时自动改用微软在线神经网络语音（中文音质更好），在本机播放。
+_TTS_LOCK = threading.Lock()
+_TTS = {"proc": None, "gen": 0, "err": "", "engine": "", "playing": False}
+_TTS_SAPI_OK = None   # None=未检测；True/False=本机 SAPI5 是否有可用语音
+
+
+def _tts_sapi_voices():
+    global _TTS_SAPI_OK
+    if _TTS_SAPI_OK is None:
+        try:
+            import win32com.client as _wc
+            v = _wc.Dispatch("SAPI.SpVoice")
+            _TTS_SAPI_OK = bool(v.GetVoices().Count > 0)
+        except Exception:
+            _TTS_SAPI_OK = False
+        log("TTS 检测本地 SAPI 语音: %s" % _TTS_SAPI_OK)
+    return _TTS_SAPI_OK
+
+
+def _tts_aborted(gen):
+    with _TTS_LOCK:
+        return _TTS["gen"] != gen
+
+
+def _tts_tmpdir():
+    import tempfile
+    d = os.path.join(tempfile.gettempdir(), "rebang_tts")
+    try:
+        os.makedirs(d, exist_ok=True)
+    except Exception:
+        d = tempfile.gettempdir()
+    return d
+
+
+def tts_synth_mp3(text, rate=1.0):
+    """跨平台在线合成：微软神经网络语音 → mp3 字节（带缓存）；失败返回 None。
+    电脑端(Windows)与云端(Linux)通用，供 /api/tts/audio 给手机 WebView 用 <audio> 播放。"""
+    try:
+        import hashlib
+        key = hashlib.md5(("%s|%s" % (text, round(rate, 2))).encode("utf-8")).hexdigest()
+        path = os.path.join(_tts_tmpdir(), "a" + key + ".mp3")
+        if not os.path.exists(path) or os.path.getsize(path) < 200:
+            import asyncio
+            import edge_tts
+            pct = int(round((rate - 1.0) * 100))
+
+            async def _go():
+                c = edge_tts.Communicate(text, "zh-CN-XiaoxiaoNeural",
+                                         rate="%+d%%" % pct)
+                await c.save(path)
+            asyncio.run(_go())
+        with open(path, "rb") as f:
+            return f.read()
+    except Exception as e:
+        log("TTS synth 异常: %r" % (e,))
+        return None
+
+
+def _tts_play_sapi(text, sapi, gen):
+    """引擎1：本机 SAPI5（进程内，需要系统装有语音库）"""
+    try:
+        import pythoncom
+        import win32com.client
+        pythoncom.CoInitialize()
+        v = win32com.client.Dispatch("SAPI.SpVoice")
+        v.Rate = sapi
+        v.Volume = 100
+        v.Speak(text, 1)  # SPF_ASYNC
+        while True:
+            if _tts_aborted(gen):
+                try:
+                    v.Speak("", 65)   # ASYNC+PURGE 立即停止
+                    v.Skip("Sentence", 32767)
+                except Exception:
+                    pass
+                return False
+            try:
+                st = v.Status.RunningState
+            except Exception:
+                st = 1
+            if st == 1:  # SRPSDone 朗读完成
+                return True
+            time.sleep(0.1)
+    except Exception as e:
+        with _TTS_LOCK:
+            _TTS["err"] = "本地语音不可用(%s)" % e.__class__.__name__
+        log("TTS SAPI 异常: %r" % (e,))
+        return False
+
+
+def _tts_play_edge(text, rate, gen):
+    """引擎2：微软在线神经网络语音（联网合成 mp3）→ 本机 MCI 播放"""
+    try:
+        import hashlib
+        key = hashlib.md5(("%s|%s" % (text, round(rate, 2))).encode("utf-8")).hexdigest()
+        path = os.path.join(_tts_tmpdir(), key + ".mp3")
+        if not os.path.exists(path):
+            import asyncio
+            import edge_tts
+            pct = int(round((rate - 1.0) * 100))
+
+            async def _go():
+                c = edge_tts.Communicate(text, "zh-CN-XiaoxiaoNeural",
+                                         rate="%+d%%" % pct)
+                await c.save(path)
+            asyncio.run(_go())
+        import ctypes
+        winmm = ctypes.WinDLL("winmm")
+        winmm.mciSendStringW('close tts', None, 0, 0)
+        r = winmm.mciSendStringW('open "%s" type mpegvideo alias tts' % path, None, 0, 0)
+        if r != 0:
+            with _TTS_LOCK:
+                _TTS["err"] = "音频播放器打开失败(%d)" % r
+            return False
+        winmm.mciSendStringW('play tts', None, 0, 0)
+        while True:
+            if _tts_aborted(gen):
+                winmm.mciSendStringW('stop tts', None, 0, 0)
+                winmm.mciSendStringW('close tts', None, 0, 0)
+                return False
+            buf = ctypes.create_unicode_buffer(64)
+            winmm.mciSendStringW('status tts mode', buf, 64, 0)
+            if buf.value != "playing":
+                winmm.mciSendStringW('close tts', None, 0, 0)
+                return True
+            time.sleep(0.12)
+    except Exception as e:
+        with _TTS_LOCK:
+            _TTS["err"] = "在线语音不可用(%s)" % e.__class__.__name__
+        log("TTS edge 异常: %r" % (e,))
+        return False
+
+
+def _tts_play_ps(text, sapi, gen):
+    """引擎3：PowerShell System.Speech 子进程兜底"""
+    try:
+        t = text.replace("'", "''").replace("`", "").replace("\r", " ").replace("\n", " ")
+        script = ("Add-Type -AssemblyName System.Speech;"
+                  "$s=New-Object System.Speech.Synthesis.SpeechSynthesizer;"
+                  "$s.Rate=%d;$s.Speak('%s');$s.Dispose()" % (sapi, t))
+        with _TTS_LOCK:
+            p = subprocess.Popen(
+                ["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+                 "-Command", script],
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            _TTS["proc"] = p
+        p.wait()
+        return p.returncode == 0 and not _tts_aborted(gen)
+    except Exception as e:
+        with _TTS_LOCK:
+            _TTS["err"] = "PowerShell 语音不可用(%s)" % e.__class__.__name__
+        log("TTS PS 异常: %r" % (e,))
+        return False
+
+
+def _tts_run(gen, text, sapi, rate):
+    t0 = time.time()
+    with _TTS_LOCK:
+        _TTS["playing"] = True
+    try:
+        for name, fn in (("sapi", lambda: _tts_play_sapi(text, sapi, gen)),
+                         ("edge", lambda: _tts_play_edge(text, rate, gen)),
+                         ("ps", lambda: _tts_play_ps(text, sapi, gen))):
+            if _tts_aborted(gen):
+                return
+            if name == "sapi" and not _tts_sapi_voices():
+                continue
+            if fn():
+                with _TTS_LOCK:
+                    _TTS["engine"] = name
+                log("TTS[%s] 完成 %.1fs" % (name, time.time() - t0))
+                return
+            if _tts_aborted(gen):
+                return
+            log("TTS[%s] 失败，尝试下一个引擎" % name)
+        with _TTS_LOCK:
+            if not _TTS["err"]:
+                _TTS["err"] = "没有可用的语音引擎"
+        log("TTS 全部引擎失败: %s" % text[:30])
+    finally:
+        with _TTS_LOCK:
+            _TTS["playing"] = False
+
+
+def _tts_kill():
+    with _TTS_LOCK:
+        p = _TTS["proc"]
+        _TTS["gen"] += 1
+        _TTS["proc"] = None
+        _TTS["playing"] = False
+    if p and p.poll() is None:
+        try:
+            p.kill()
+        except Exception:
+            pass
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            w = ctypes.WinDLL("winmm")
+            w.mciSendStringW('stop tts', None, 0, 0)
+            w.mciSendStringW('close tts', None, 0, 0)
+        except Exception:
+            pass
+
+
 def shutdown_server():
     global HTTPD
     try:
@@ -2669,6 +2925,28 @@ def free_port():
 # ---------------------------------------------------------------- 单实例
 
 SINGLE_PORT = 8920  # 固定端口：首个实例占用，后来的实例据此发现已运行的实例
+
+# Windows 命名互斥体：比端口探测更可靠——从进程创建到退出全程由系统持有，
+# 进程崩溃也会自动释放，彻底消除“绑定探测口→关闭→正式起服务”之间的空窗竞态
+_MUTEX_NAME = "RebangHelper_SingleInstance"
+_MUTEX_HOLDER = []   # 仅用于保住句柄不被回收
+
+
+def _mutex_held():
+    """创建互斥体；若已存在（其它实例持有）返回 True，本进程随即退出"""
+    if os.name != "nt":
+        return False
+    try:
+        import ctypes
+        k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        h = k32.CreateMutexW(None, False, _MUTEX_NAME)
+        if not h:
+            return False
+        _MUTEX_HOLDER.append(h)   # 句柄保持到进程退出
+        return ctypes.get_last_error() == 183   # ERROR_ALREADY_EXISTS
+    except Exception as e:
+        log("单实例互斥体创建失败: %r" % (e,))
+        return False
 
 
 # 本机探测必须绕过系统/环境代理，否则开了代理的电脑会探测失败导致多开
@@ -2732,6 +3010,21 @@ def acquire_port():
     env = os.environ.get("REBANG_PORT") or os.environ.get("PORT")
     if env:
         return int(env)
+    # 互斥体守卫（最先做，杜绝任何竞态窗口）：已有实例 → 唤起其窗口后退出
+    if _mutex_held():
+        info = _probe_instance(SINGLE_PORT)
+        shown = False
+        if info:
+            try:
+                _LOCAL_OPENER.open(
+                    "http://127.0.0.1:%d/api/show" % SINGLE_PORT, timeout=4)
+                shown = True
+            except Exception:
+                pass
+        if not shown:
+            shown = focus_existing_window()
+        log("单实例守卫：已有实例在运行，本次启动退出（shown=%s）" % shown)
+        sys.exit(0)
     s = socket.socket()
     try:
         s.bind(("127.0.0.1", SINGLE_PORT))

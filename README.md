@@ -4,7 +4,7 @@
 作者：**七度** ｜ 免费 · 无广告 · 不需要登录任何账号
 
 **在线体验（网页版，手机浏览器直接打开，可添加到主屏幕）**：
-👉 https://hotboard-mobile.app.workbuddy.host/?sharecode=5FPPVW7FTM
+👉 hotboard-mobile.app.workbuddy.host?sharecode=5FPPVW7FTM
 
 **安卓 App**：下载本仓库的 `热榜助手.apk` 安装，与电脑端功能一致
 
@@ -45,6 +45,8 @@
 ![设置页截图2](设置页2.png)
 
 ## 📝 更新日志
+### V6.1
+- 新增，国际新闻，小说分类，20+新新闻源。
 
 ### V6.0
 - 安卓 App 朗读修复 + 双保险：原生语音不可用时自动切换**云端在线神经网络语音**（不依赖手机语音引擎，联网即有声音）

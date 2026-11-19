@@ -12,11 +12,12 @@
 
 import base64
 import gzip
-import json
+import hashlib, html as _html, json
 import os
 import re
 import socket
 import subprocess
+import ssl
 import sys
 import threading
 import time
@@ -28,8 +29,11 @@ from html.parser import HTMLParser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 APP_NAME = "热榜助手"
-APP_VER = "6.0"
+APP_VER = "8.0.2"
+PRESET_VER = "8.0.2"   # 内置源清单版本：变化时启动会把内置源的新地址/说明同步进用户已有配置
 AUTHOR = "七度"
+# 安装包下载页（云托管静态页，手机浏览器可直接下载 exe/apk）
+DL_PAGE_URL = "https://quickest-ocelot-d9fti0mr03ae447f-1518118034.tcloudbaseapp.com/dl/"
 
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
@@ -72,13 +76,54 @@ def log(msg):
 # ---------------------------------------------------------------- 源清单
 
 def S(sid, name, url, parser="auto", sel=None, count=30, enabled=True, note="", search="",
-      cat="综合"):
+      cat="综合", alt=None):
     return {"id": sid, "name": name, "url": url, "parser": parser, "sel": sel or {},
-            "count": count, "enabled": enabled, "note": note, "search": search, "cat": cat}
+            "count": count, "enabled": enabled, "note": note, "search": search, "cat": cat,
+            "alt": [str(a).strip() for a in (alt or []) if str(a or "").strip()][:5]}
 
 
-# 分类：综合 / 财经 / 娱乐 / 科技 / 社区（与 rebang.today 的版块划分对齐）
-CATS = ["综合", "财经", "娱乐", "科技", "社区"]
+def split_cat(raw):
+    """V8.0.2：一个源可以同时属于多个分类，源里的 cat 用逗号分隔（如「开源,资源」）"""
+    parts = re.split(r"[,，、;；/]+", str(raw or ""))
+    out = []
+    for p in parts:
+        p = p.strip()[:CAT_MAX]
+        if p and p not in out and p not in ("全部", "总排行", "地区新闻", "本地"):
+            out.append(p)
+    return out
+
+
+def join_cat(raw):
+    """把任意写法的分类字段规范成「主分类,次分类…」字符串"""
+    cs = split_cat(raw)
+    return ",".join(cs[:4]) if cs else "综合"
+
+
+# 分类：综合 / 财经 / 娱乐 / 科技 / 社区 / 小说（M8.2：国际新闻、币圈整类下线）
+CATS = ["综合", "财经", "娱乐", "科技", "社区", "小说", "资源", "Agent",
+        "医学顶刊", "运动科学", "经济期刊", "开源", "推广"]
+
+CAT_MAX = 12          # 单个分类名最大长度
+CAT_MAXN = 60         # 最多分类数
+
+
+def norm_cats(raw, fallback=None):
+    """清洗用户自定义分类：去空、去重、限长、限量；始终保证有「综合」。"""
+    out = []
+    if isinstance(raw, (list, tuple)):
+        for c in raw:
+            c = str(c or "").strip()[:CAT_MAX]
+            if not c or c in ("全部", "总排行", "地区新闻", "本地"):
+                continue
+            if c not in out:
+                out.append(c)
+            if len(out) >= CAT_MAXN:
+                break
+    if not out:
+        out = list(fallback or CATS)
+    if "综合" not in out:
+        out.insert(0, "综合")
+    return out
 
 
 _MIRROR = "https://tophub.today/n/"
@@ -107,9 +152,7 @@ DEFAULT_SOURCES = [
     S("douban_group", "豆瓣社区", _MIRROR + "WYKd6jdaPj", "tophub", note="小组讨论精选",
       search="https://www.douban.com/search?q={q}", cat="社区"),
     S("douban_movie", "豆瓣书影音", _MIRROR + "mDOvnyBoEB", "tophub", note="新片榜",
-      search="https://search.douban.com/movie/subject_search?search_text={q}", cat="娱乐"),
-    S("huxiu", "虎嗅", _MIRROR + "5VaobgvAj1", "tophub", note="热文榜",
-      search="https://www.huxiu.com/search.html?s={q}", cat="科技"),
+      search="https://search.douban.com/movie/subject_search?search_text={q}", cat="小说"),
     S("sspai", "少数派", "https://sspai.com/api/v1/article/index/page/get?limit=20&offset=0",
       "sspai", note="热门文章", search="https://sspai.com/search/post/{q}", cat="科技"),
     S("thepaper", "澎湃新闻", _MIRROR + "wWmoO5Rd4E", "tophub", note="热榜",
@@ -123,35 +166,25 @@ DEFAULT_SOURCES = [
     S("dapenti", "喷嚏网", "https://www.dapenti.com/", "html",
       {"block": "div.section-content", "link": "h3 a"},
       note="喷嚏图卦/资讯", search="https://www.dapenti.com/", cat="娱乐"),
-    S("smzdm", "什么值得买", "https://post.smzdm.com/", "html",
-      {"link": "h5.z-feed-title a"},
-      note="好文/好价", search="https://search.smzdm.com/?c=home&s={q}", cat="综合"),
     S("guancha", "观风闻", "https://www.guancha.cn/", "html",
       {"link": "h4.module-title a"},
       note="风闻社区", search="https://www.guancha.cn/search?q={q}", cat="综合"),
-    S("52pojie", "吾爱破解", _MIRROR + "NKGoRAzel6", "tophub", note="今日热帖",
-      search="https://www.52pojie.cn/search.php?mod=forum&srchtxt={q}", cat="社区"),
+    S("52pojie", "吾爱破解", "https://www.52pojie.cn/forum.php?mod=forumdisplay&fid=16"
+      "&filter=typeid&typeid=232", "52pojie", count=30,
+      note="软件安全 › 精品软件区 › [Android]", 
+      search="https://www.52pojie.cn/search.php?mod=forum&srchtxt={q}", cat="资源"),
     S("10jqka", "同花顺", "https://news.10jqka.com.cn/", "html",
       {"link": "span.arc-title a"},
       note="财经要闻", search="https://search.10jqka.com.cn/search?q={q}", cat="财经"),
-    S("xueqiu", "雪球", "https://xueqiu.com/", "html", {},
-      enabled=False, note="站点有风控校验，建议在设置里换成自己的雪球接口", cat="财经"),
     S("landian", "蓝点网", "https://www.landiannews.com/", "html",
       {"block": "article.post-list-main", "link": "h2 a"},
       note="科技资讯", search="https://www.landiannews.com/?s={q}", cat="科技"),
     S("appinn", "小众软件", "https://www.appinn.com/", "html",
       {"link": "h2.post-title a"},
       note="软件推荐", search="https://www.appinn.com/?s={q}", cat="科技"),
-    S("cls", "财联社", "https://www.cls.cn/telegraph", "html",
-      {"block": "div.telegraph-content-box", "link": "a"},
-      enabled=False, note="页面为动态渲染，默认关；可在设置里换成自己的接口", cat="财经"),
     S("huanqiu", "环球网", "https://www.huanqiu.com/", "html",
       {"block": "dl.thrnewslist dd", "link": "a"},
       note="要闻", search="https://www.huanqiu.com/search?q={q}", cat="综合"),
-    S("iqiyi", "爱奇艺", "https://www.iqiyi.com/", "html", {}, enabled=False,
-      note="榜单为动态渲染，需自行填可用地址", cat="娱乐"),
-    S("youpin", "小米有品", "https://www.xiaomiyoupin.com/", "html", {}, enabled=False,
-      note="榜单为动态渲染，需自行填可用地址", cat="综合"),
     S("gamersky", "游民星空", "https://www.gamersky.com/", "html",
       {"block": "li.li3", "link": "a"},
       note="游戏资讯", search="https://so.gamersky.com/all?s={q}", cat="娱乐"),
@@ -159,30 +192,29 @@ DEFAULT_SOURCES = [
       {"block": "div.event", "link": "a"},
       note="开源资讯", search="https://www.oschina.net/search?scope=news&q={q}", cat="科技"),
     S("github", "GitHub今日上升", "https://github.com/trending?since=daily", "github",
-      note="按今日新增 Star 排序", search="https://github.com/search?q={q}", cat="科技"),
+      note="按今日新增 Star 排序", search="https://github.com/search?q={q}", cat="开源,资源"),
     S("dangdang", "当当图书榜",
       "http://bang.dangdang.com/books/bestsellers/01.00.00.00.00.00-recent7-0-0-1-1",
       "html", {"block": "ul.bang_list li", "link": "div.name a", "heat": "div.star"},
-      count=20, note="近7日畅销榜", search="http://search.dangdang.com/?key={q}", cat="综合"),
+      count=20, note="近7日畅销榜", search="http://search.dangdang.com/?key={q}", cat="小说"),
     S("ifanr", "爱范儿", "https://www.ifanr.com/", "html",
       {"block": "div.article-item--list", "link": "h3 a"},
       note="科技资讯", search="https://www.ifanr.com/?s={q}", cat="科技"),
     S("d423", "423Down", "https://www.423down.com/", "d423", count=20, note="软件更新",
-      search="https://www.423down.com/search/{q}", cat="科技"),
+      search="https://www.423down.com/search/{q}", cat="资源"),
     S("ypojie", "易破解", "https://www.ypojie.com/", "ypojie", count=20, note="软件更新",
-      search="https://www.ypojie.com/?s={q}", cat="科技"),
+      search="https://www.ypojie.com/?s={q}", cat="资源"),
     S("cr173", "下载吧", "https://www.cr173.com/", "cr173", count=20, note="软件更新",
-      search="https://so.cr173.com/?q={q}", cat="科技"),
-    S("baicaio", "微线报", "https://www.baicaio.com/", "baicaio", count=20,
-      note="原 hxzxb.com 已下线，改用同类线报源", search="https://www.baicaio.com/search/?keyword={q}", cat="综合"),
-    S("36kr", "36氪", _MIRROR + "Q1Vd5Ko85R", "tophub", note="24小时热榜",
-      search="https://36kr.com/search/articles/{q}", cat="科技"),
-    S("weread", "微信读书", _MIRROR + "4KvxEX0dkx", "tophub", count=20, note="总榜",
-      search="https://weread.qq.com/", cat="综合"),
+      search="https://so.cr173.com/?q={q}", cat="资源"),
+    # V8.0.2：删除「微线报」（baicaio）、「虎嗅」、「Apifox API 中心」、「GoodNovel」、
+    # 「Property Week」，并记入 REMOVED_SOURCES，老配置升级时一并清掉
+    # V7.8.1：微信读书榜单页（https://weread.qq.com/#rank）是服务端渲染，无需登录即可拿到
+    # 「大家都在读 / 近期热读」书单 —— 换成专用解析器后实测可抓 40+ 条
+    S("weread", "微信读书·读书榜", "https://weread.qq.com/#rank",
+      "weread", count=20, enabled=False, note="微信读书热门书单（实测可抓，建议开启）",
+      search="https://weread.qq.com/", cat="小说"),
     S("tieba", "百度贴吧", _MIRROR + "Om4ejxvxEN", "tophub", note="热议榜",
       search="https://tieba.baidu.com/f/search/res?qw={q}", cat="社区"),
-    S("360hot", "360热搜", "https://m.so.com/hotnews", "html", {}, enabled=False,
-      note="原接口已失效，需自行填写可用地址", cat="综合"),
     S("xiaohongshu", "小红书", "https://www.xiaohongshu.com/explore", "html", {}, enabled=False,
       note="需登录态，建议在设置里换成自己的接口地址", cat="社区"),
 
@@ -193,8 +225,15 @@ DEFAULT_SOURCES = [
       note="官方 RSS 实时资讯", search="https://www.ithome.com/search/?q={q}", cat="科技"),
     S("sspai_rss", "少数派·最新", "https://sspai.com/feed", "rss", count=20,
       note="官方 RSS", search="https://sspai.com/search/post/{q}", cat="科技"),
-    S("kr36_hot", "36氪·热榜", _MIRROR + "Q1Vd5Ko85R", "tophub", count=20,
-      note="24 小时热榜", search="https://www.36kr.com/search/articles/{q}", cat="科技"),
+    # M5.7/V7.4：36氪热榜的 tophub 镜像已失效，改抓官方「快讯」页（云端实测 20 条）
+    S("kr36_hot", "36氪·快讯", "https://www.36kr.com/newsflashes/", "html", count=20,
+      note="36氪官方快讯流", search="https://www.36kr.com/search/articles/{q}", cat="科技"),
+    # M5.7/V7.4：用户新增——百度热搜（云端实测 51 条）
+    S("baidu_hot", "百度热搜", "https://top.baidu.com/board?tab=realtime", "html", count=20,
+      note="百度实时热搜榜", search="https://www.baidu.com/s?wd={q}", cat="综合"),
+    # M5.7/V7.4：用户新增——哔哩哔哩热门（官方 API，云端实测 20 条；「每周必看」接口有风控 -352 不可用）
+    S("bili_hot", "哔哩哔哩·热门", "https://api.bilibili.com/x/web-interface/popular?ps=20",
+      "json", count=20, note="B站综合热门视频", search="", cat="娱乐"),
     S("landian_rss", "蓝点网·最新", "https://www.landiannews.com/feed", "rss", count=20,
       note="官方 RSS", cat="科技"),
 
@@ -212,7 +251,7 @@ DEFAULT_SOURCES = [
     S("douban_movie_hot", "豆瓣·热门电影", "https://movie.douban.com/j/search_subjects"
       "?type=movie&tag=%E7%83%AD%E9%97%A8&sort=recommend&page_limit=20&page_start=0",
       "douban_movie", count=20, note="热门推荐", search="https://movie.douban.com/explore#!type=movie&q={q}",
-      cat="娱乐"),
+      cat="娱乐", alt=["https://rsshub.rssforever.com/douban/movie/weekly|rss"]),
     S("douyin_ent", "抖音·娱乐榜", _MIRROR + "DpQvNABoNE", "tophub", count=20,
       note="娱乐热点", cat="娱乐"),
     S("bili_rss", "B站·热门", "https://api.bilibili.com/x/web-interface/ranking/v2?rid=0&type=all",
@@ -222,11 +261,9 @@ DEFAULT_SOURCES = [
       note="娱乐资讯", cat="娱乐"),
 
     # ---------------- V3.2 新增：社区 ----------------
-    S("v2ex", "V2EX·热门", _MIRROR + "Om4ejxvxEN", "tophub", count=20,
-      note="技术社区热帖", search="https://www.google.com/search?q=site:v2ex.com+{q}", cat="社区"),
-    S("douban_group_hot", "豆瓣·热门小组", "https://www.douban.com/group/explore", "html",
-      count=20, note="小组精选", search="https://www.douban.com/group/search?cat=1013&q={q}",
-      cat="社区"),
+    S("v2ex", "V2EX·热门", "https://www.v2ex.com/api/topics/hot.json", "json", count=20,
+      note="技术社区热帖（官方接口；部分地区直连不了可换自己的镜像）", search="https://www.google.com/search?q=site:v2ex.com+{q}", cat="社区"),
+
     S("tieba_hot", "贴吧·热议", _MIRROR + "Om4ejxvxEN", "tophub", count=20,
       note="热议榜", search="https://tieba.baidu.com/f/search/res?qw={q}", cat="社区"),
     S("hupu_bxj", "虎扑·步行街", _MIRROR + "G47o8weMmN", "tophub", count=20,
@@ -242,8 +279,6 @@ DEFAULT_SOURCES = [
       note="中国即时新闻", cat="综合"),
 
     # ---------------- V4.2 新增：股票财经 ----------------
-    S("cls_news", "财联社", "https://news.so.com/ns?q=%E8%B4%A2%E8%81%94%E7%A4%BE&pn=1", "360news",
-      count=20, note="经360新闻聚合（官网反爬）", search="https://www.cls.cn/searchPage?keyword={q}", cat="财经"),
     S("bloomberg", "彭博社", "https://news.so.com/ns?q=%E5%BD%AD%E5%8D%9A%E7%A4%BE&pn=1", "360news",
       count=20, note="经360新闻聚合（官网境外）", search="https://news.so.com/ns?q={q}", cat="财经"),
     S("taoguba", "淘股吧", "https://news.so.com/ns?q=%E6%B7%98%E8%82%A1%E5%90%A7&pn=1", "360news",
@@ -253,15 +288,634 @@ DEFAULT_SOURCES = [
     S("sse_news", "上交所", "http://www.sse.com.cn/", "sse", count=20,
       note="新闻发布会与公告", search="http://query.sse.com.cn/search/portalSearch.do?keyword={q}", cat="财经"),
     S("modelscope", "ModelScope模型榜", "https://modelscope.cn/api/v1/dolphin/models", "modelscope",
-      count=30, note="魔搭社区·热门模型", search="https://modelscope.cn/models?name={q}", cat="财经"),
+      count=30, note="魔搭社区·热门模型", search="https://modelscope.cn/models?name={q}", cat="Agent"),
     S("sputnik", "卫星通讯社·中国", "https://sputniknews.cn/china/", "html", count=20,
       note="俄罗斯卫星通讯社中文版", search="https://sputniknews.cn/search/?query={q}", cat="财经"),
+
+    # ---------------- 小说排行（国内 + 海外网文/电子书） ----------------
+    S("nov_shuqi", "七猫小说排行", "https://www.qimao.com/paihang/", "html", count=25,
+      note="七猫免费小说·排行榜（书旗官网为JS渲染抓不到，用七猫代替）", search="", cat="小说"),
+    S("nov_weread", "纵横小说排行", "https://www.zongheng.com/rank/", "html", count=25,
+      note="纵横中文网·排行榜（微信读书为JS渲染抓不到，用纵横代替）", search="", cat="小说"),
+    S("nov_fanqie", "番茄小说排行", "https://fanqienovel.com/rank", "html", count=25,
+      note="番茄免费小说·排行榜", search="", cat="小说"),
+    S("nov_fanshu", "帆书热门", "https://www.dushu365.com", "html", count=25,
+      note="帆书（原樊登读书）·热门好书", search="", cat="小说"),
+    S("nov_dangdang", "当当网排行", "http://bang.dangdang.com/books/bestsellers/01.00.00.00.00.00-recent7-0-0-1-1", "html",
+      sel={"block": "ul.bang_list li", "link": "div.name a", "heat": "div.star"}, count=25,
+      note="当当·畅销热卖榜（近7日）", search="http://search.dangdang.com/?key={q}", cat="小说"),
+    S("nov_wattpad", "Wattpad", "https://www.wattpad.com", "html", count=25,
+      note="全球最大社交网文（青春/言情/同人）", search="https://www.wattpad.com/search/{q}", cat="小说"),
+
+    S("nov_tapas", "Tapas", "https://tapas.io", "html", count=25,
+      note="都市/奇幻/浪漫连载", search="https://tapas.io/search?query={q}", cat="小说"),
+    S("nov_ao3", "AO3 同人", "https://archiveofourown.org", "html", count=25,
+      note="Archive of Our Own 同人创作大站", search="https://archiveofourown.org/works/search?work_search[query]={q}", cat="小说"),
+    # Kindle Vella（亚马逊 2025 年已停运）与 XinXii（站点改版后无可提取的图书列表）
+    # 已从内置源移除；老用户配置里保留的不受影响。
+    S("nov_smashwords", "Smashwords", "https://www.smashwords.com", "html", count=25,
+      note="独立作者电子书分发", search="https://www.smashwords.com/search/?query={q}", cat="小说"),
+    # 豆瓣·热门小组（403 反爬）、WebNovel（403）、古登堡计划（503 反爬）已删，见 REMOVED_SOURCES
+    S("nov_overdrive", "OverDrive / Libby", "https://overdrive.com", "html", count=25,
+      note="图书馆借阅电子书", search="", cat="小说"),
+    S("nov_foxnovel", "FoxNovel", "https://www.foxnovel.com", "html", count=25,
+      note="海外多语种网文", search="", cat="小说"),
+
+    # ---------------- Agent（AI 智能体/模型竞技榜，M4.6 用户指定） ----------------
+    S("agent_aiclub", "AI·Club Agent 榜", "https://www.ai-club.cn/rank/arena/agent", "html", count=20,
+      note="AI Club 竞技场·Agent 排行（Elo 分）", search="", cat="Agent"),
+    S("agent_aitnt", "AITNT Agent 排行", "https://www.aitntnews.com/arena/agent/", "html", count=20,
+      note="AI TNT News·Agent 竞技场", search="", cat="Agent"),
+    S("agent_atease", "临境 Arena Agent 榜", "https://arena.atease.dev/agent/", "html", count=25,
+      note="临境竞技场·Agent 模型排行", search="", cat="Agent"),
+    S("app_seadata", "SeaData Google Play 榜", "https://www.seadata.ai/rankings/google-play", "html", count=25, enabled=False,
+      note="动态渲染且榜单需登录，暂无法抓取", search="", cat="科技"),
+    S("app_socialpeta", "SocialPeta Google Play 榜", "https://socialpeta.com/zh/downloads-revenue-charts/google-play/apps", "html", count=30,
+      note="Google Play 应用下载/收入榜", search="", cat="财经"),
+    # V7.8.1：微软商店换到「Top free apps」分类页（服务端渲染），实测可抓 23 条应用名
+    S("app_msstore", "微软商店热门应用", "https://apps.microsoft.com/store/category/Productivity?hl=zh-CN&gl=CN", "html", count=25, enabled=False,
+      note="Top Free 应用下载榜（实测可抓，建议开启）", search="", cat="科技"),
+    S("autohome_rank", "汽车之家销量榜", "https://www.autohome.com.cn/rank/1/", "autohome", count=20,
+      note="车系月销榜（销量为热度）", search="https://so.autohome.com.cn/z?q={q}", cat="综合"),
+    S("stats_gov", "国家统计局·数据发布", "https://www.stats.gov.cn/sj/zxfb/", "stats", count=30,
+      note="首页›数据›数据发布（新闻标题）", search="https://so.stats.gov.cn/search?q={q}", cat="财经"),
+    S("chinanews_site", "中国新闻网", "https://www.chinanews.com.cn/", "html",
+      sel={"block": "div.rdph-list li", "link": "a"}, count=25,
+      note="中新热榜", search="https://sou.chinanews.com.cn/search.do?q={q}", cat="综合"),
+    S("cctv_news", "央视网新闻", "https://news.cctv.com/2019/07/gaiban/cmsdatainterface/page/news_1.jsonp?cp=1", "jsonp", count=30,
+      note="央视网·要闻（官方接口）", search="https://search.cctv.com/search.php?qtext={q}", cat="综合"),
+    S("chinacom_news", "中国网·要闻", "http://news.china.com.cn/node_7247300.htm", "html", count=30,
+      note="国家重点新闻网站·要闻", search="http://search.china.com.cn/search?q={q}", cat="综合"),
+
+    S("sucaizy", "素材资源", "https://www.sucaizy.com/", "sucaizy", count=20,
+      note="最新发布·软件与素材资源", search="https://www.sucaizy.com/?s={q}", cat="资源"),
+    S("guohe", "果核剥壳", "https://www.ghxi.com/feed", "rss", count=15,
+      note="果核剥壳·绿色软件/破解资源更新", search="https://www.ghxi.com/?s={q}", cat="资源"),
+    S("oscar_films", "奥斯卡·历届最佳影片", "", "oscar", count=98,
+      note="第1届(1927/28)至第98届(2025)历届最佳影片（内置数据，离线可用）", search="", cat="娱乐"),
+
+    # ---------------- 综合 · 票房 ----------------
+    # M5.2/V6.9：piaofang.maoyan.com 是 JS 渲染的空壳页，本机与云端都取不到列表；
+    # 换成猫眼主站「正在热映」列表页（静态 HTML，云端实测 18 条，含类型/主演/上映时间）
+    S("maoyan_box", "猫眼·正在热映", "https://www.maoyan.com/films?showType=2", "html",
+      count=20, note="猫眼电影·正在热映（含类型/主演/上映时间）", search="", cat="娱乐"),
+    # M5.2/V6.9：淘票票「正在热映」列表（云端实测 93 条，带评分/导演/主演）——票房位可用替代
+    S("taopiaopiao", "淘票票·正在热映", "https://www.taopiaopiao.com/showList.htm?cn=310100",
+      "html", count=20, note="淘票票·正在热映（上海站，含评分/导演/主演）",
+      search="", cat="娱乐"),
+    # M5.2/V6.9：BoxOfficeMojo 全球票房总榜（云端实测 99 条，英文原始榜位）
+    S("bom_chart", "BoxOfficeMojo·全球票房榜",
+      "https://www.boxofficemojo.com/chart/top_lifetime_gross/", "html", count=20,
+      note="BoxOfficeMojo 全球票房总榜（英文）", search="", cat="娱乐"),
 ]
+
+# ---------------------------------------------------------------- M8.1：下线源与默认顺序
+# 用户要求三端移除的源：已从清单剔除，同时会从用户旧配置里彻底删掉
+REMOVED_SOURCES = (
+    "zhihudaily",        # 知乎日报
+    "36kr",              # 36氪
+    "kr36_hot",          # 36氪·快讯
+    "thepaper_rss",      # 澎湃新闻·热榜
+    "douban_group",      # 豆瓣社区
+    "douban_movie",      # 豆瓣书影音
+    # M8.2：用户要求三端整类下线「国际新闻」「币圈」
+    "intl_cnn", "intl_nyt", "intl_trends24", "intl_youtube", "intl_wapo",
+    "intl_wsj", "intl_abcus", "intl_bbc", "intl_guardian", "intl_reuters",
+    "intl_telegraph", "intl_economist", "intl_cbc", "intl_globemail", "intl_ctv",
+    "intl_abcau", "intl_aus", "intl_newscomau", "intl_cna", "intl_straits",
+    "intl_dw", "intl_lemonde",
+    "cry_coindesk", "cry_cointelegraph", "cry_cryptopanic", "cry_theblock",
+    "cry_decrypt", "cry_newsbtc", "cry_beincrypto",
+    # M8.3：用户点名的 10 个源一并下线
+    "agent_apirank", "nov_reedsy", "nov_feedbooks", "nov_novelcat", "nov_bnnoook",
+    # M8.4：用户要求删掉「抓不到/已失效」的 34 个源（原名 _DEAD_SRC 清单 + 国务院新闻办）
+    "scio_gov",
+    "sourceforge_blog", "codeberg",
+    "nmjc", "zhnk", "zhwk", "zhped", "zhbl", "zhcv", "zhjh", "zhsj", "yiigle",
+    "pkuyxb", "fduyxb", "scuyxb", "sysuyxb", "hjmun", "hjkd",
+    "scichina_life", "pumc", "wanfang_med", "cnki_med",
+    "cjsm_cn", "sportinfo",
+    "ceq", "iwec", "cqte", "cjryj",
+    "gitlab", "gitee", "gitcode", "coding", "osdn", "launchpad",
+    # M9.1：整类下线的 5 个分类 + 点名删除的 27 个实测失败源
+    "macro_xinhua", "ind_miit",     # M9.1：把目录/源名当新闻标题抓（实测）
+    "agri_spkx",
+    "agri_zuowu",
+    "ai_baai",
+    "auto_autocar",
+    "brand_36kr",
+    "brand_chinagoods",
+    "brand_digitaling",
+    "brand_huxiu",
+    "brand_iyiou",
+    "brand_kuaibao",
+    "brand_prn",
+    "brand_retailplanet",
+    "brand_star",
+    "brand_wgsn",
+    "chem_cuihua",
+    "chem_ranliao",
+    "cross_100ec",
+    "cross_amz123",
+    "cross_chwang",
+    "cross_cifnews",
+    "cross_crunchbase",
+    "cross_dny123",
+    "cross_gd",
+    "cross_mjzj",
+    "cross_singlewindow",
+    "cross_wto",
+    "cs_scichina",
+    "hist_behistorical",
+    "ind_huxiu",
+    "ind_iyiou",
+    "law_fsyj",
+    "mat_gsytb",
+    "pharm_cjnc",
+    "pharm_zgyxzz",
+    "pharm_zyyl",
+    "phil_ajs",
+    "phil_ars",
+    "phil_cssn",
+    "phil_ethics",
+    "phil_jp",
+    "phil_pr",
+    "phil_soc",
+    "phil_whz",
+    "phil_xsj",
+    "phil_zxyj",
+    "phys_inspire",
+    "psy_nps",
+    "psy_science",
+    "pub_xdyfyx",
+    "pub_zhyfyx",
+    "real_jsb",
+    "space_avic",
+    "space_breakingdefense",
+    "space_casc",
+    "space_casic",
+    "space_cmse",
+    "space_cnsa",
+    "space_dsti",
+    "space_news",
+    "space_norinco",
+    "space_spacenews",
+    "sport_bbc",
+    "sport_cctv5",
+    "sport_daily",
+    "sport_dongqiudi",
+    "sport_espn",
+    "sport_gov",
+    "sport_hupu",
+    "sport_olympics",
+    "sport_skysports",
+    "sport_zhibo8",
+    # M9.2：用户实测抓取失败清单（11-17）：反爬 403/412/503 或站点失效；能换通道的已换，换不了的 36 个删除
+    "auto_autonews",
+    "bio_cbes",
+    "bio_europepmc",
+    "bio_sciencedirect",
+    "chem_hgxb",
+    "cs_joc",
+    "douban_group_hot",
+    "energy_powertech",
+    "energy_rew",
+    "energy_sgcc",
+    "energy_solar",
+    "env_ecology",
+    "hist_research",
+    "hist_shorpy",
+    "law_fxyj",
+    "law_xzfx",
+    "law_zwfx",
+    "mat_pmse",
+    "neuro_cjnd",
+    "neuro_nsr",
+    "nov_gutenberg",
+    "nov_webnovel",
+    "pharm_cnj",
+    "phys_astro",
+    "psy_progress",
+    "psy_psychonomic",
+    "real_crb",
+    "real_jijiantong",
+    "urban_lalavista",
+    "urban_planning",
+    "urban_upf",
+    "vc_dealroom",
+    "vc_itjuzi",
+    "vc_lieyun",
+    "vc_pencil",
+    # V7.9.14：用户要求删除「产业赛道」分类及其下全部新闻源（国资委迁入宏观政策，不在此列）
+    "ind_yicai",
+    "ind_caixin",
+    "ind_cnii",
+    "ind_36kr",
+    "ind_techcrunch",
+    "ind_mit",
+    "bmj",   # V8.0.0：The BMJ 英国医学杂志，用户点名删除
+    # V8.0.2：用户点名删除的 5 个源
+    "huxiu", "baicaio", "nov_goodnovel", "agent_apifox", "real_propertyweek",
+)
+
+# M8.2：整类下线的分类（源按分类一并清掉，老配置里的分类名也会被摘除）
+DROP_CATS = ("国际新闻", "币圈", "医疗期刊", "航天军工", "消费品牌", "跨境出海", "体育赛事",
+             "哲学社会刊", "产业赛道")   # V8.0.0：产业赛道整类下线（国资委迁入宏观政策）
+
+
+def strip_drop_cats(cats):
+    """剔掉已整类下线的分类名：老配置、旧客户端回传、云端同步都可能把它们带回来"""
+    return [c for c in (cats or []) if str(c or "").strip() not in DROP_CATS]
+
+# 默认源顺序：决定侧边栏、看板、总排行里各源出现的先后（未列出的保持原有相对顺序）
+SOURCE_ORDER = [
+    "weibo", "toutiao", "baidu", "qqnews", "bilibili", "zaobao",
+    "netease", "thepaper", "zhihu", "huanqiu", "guancha", "ifeng", "github",
+    "douyin", "ithome", "xiaohongshu",
+]
+
+DEFAULT_SOURCES = [s for s in DEFAULT_SOURCES if s["id"] not in REMOVED_SOURCES]
+_SRC_RANK = {sid: i for i, sid in enumerate(SOURCE_ORDER)}
+DEFAULT_SOURCES.sort(key=lambda s: _SRC_RANK.get(s["id"], len(SOURCE_ORDER)))
+
+
+# ---------------------------------------------------------------- 期刊 / 开源（M5.0）
+# 付费墙期刊站（NEJM/Lancet/JAMA/Nature 系/Elsevier 系）几乎都挡爬虫，
+# 统一走 Crossref 公开元数据取「该刊最新发表的论文」；能拿到 RSS 的优先用 RSS（更及时）。
+# M5.2/V6.9：带 mailto 进 Crossref「礼貌池」，云端批量抓 12 个期刊源的 429 明显缓解
+CROSSREF_API = ("https://api.crossref.org/journals/%s/works"
+                "?rows=20&sort=published&order=desc"
+                "&select=title,DOI,published,published-online,issued"
+                "&mailto=rebang-helper@outlook.com")
+
+# (id, 显示名, ISSN, 分类)
+_JOURNALS = [
+    # ---- 国际医学顶刊 ----
+    ("nejm", "NEJM 新英格兰医学杂志", "0028-4793", "医学顶刊"),
+    ("lancet", "The Lancet 柳叶刀", "0140-6736", "医学顶刊"),
+    ("jama", "JAMA 美国医学会杂志", "0098-7484", "医学顶刊"),
+    # V7.9.14：「The BMJ 英国医学杂志」按用户要求删除
+    ("natmed", "Nature Medicine 自然·医学", "1546-170X", "医学顶刊"),
+    ("cellmed", "Cell Reports Medicine", "2666-3791", "医学顶刊"),
+    ("annintmed", "Annals of Internal Medicine", "0003-4819", "医学顶刊"),
+    ("circulation", "Circulation 循环", "0009-7322", "医学顶刊"),
+    ("gastro", "Gastroenterology 胃肠病学", "0016-5085", "医学顶刊"),
+    ("blood", "Blood 血液学", "0006-4971", "医学顶刊"),
+    # ---- 运动科学（国际） ----
+    ("ajsm", "AJSM 美国运动医学杂志", "0363-5465", "运动科学"),
+    ("msse", "MSSE 运动医学与科学", "0195-9131", "运动科学"),
+    ("sportsmed", "Sports Medicine 运动医学综述", "0112-1642", "运动科学"),
+    ("jospt", "JOSPT 骨科与运动物理治疗", "1938-1344", "运动科学"),
+    ("kssta", "KSSTA 膝外科学与运动创伤", "0942-2056", "运动科学"),
+    ("cjsm", "CJSM 临床运动医学", "1050-642X", "运动科学"),
+    ("jat", "J Athletic Training", "1062-6050", "运动科学"),
+    # ---- 经济期刊（国际顶刊） ----
+    ("aer", "AER 美国经济评论", "0002-8282", "经济期刊"),
+    ("qje", "QJE 经济学季刊", "0033-5533", "经济期刊"),
+    ("jpe", "JPE 政治经济学杂志", "0022-3808", "经济期刊"),
+    ("econometrica", "Econometrica 计量经济学", "1468-0262", "经济期刊"),
+    ("restud", "REStud 经济研究评论", "1467-937X", "经济期刊"),
+    ("rfs", "RFS 金融研究评论", "1465-7368", "经济期刊"),
+]
+for _sid, _nm, _issn, _cat in _JOURNALS:
+    DEFAULT_SOURCES.append(S(
+        _sid, _nm, CROSSREF_API % _issn, "crossref", count=20,
+        note="最新论文 · Crossref 元数据（付费墙站也能取到标题）", cat=_cat))
+
+# RSS / API 类（实测可抓，默认开启）
+DEFAULT_SOURCES += [
+    S("pubmed", "PubMed 文献检索", "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
+      "?db=pubmed&term=%22journal+article%22%5Bpt%5D&retmax=20&sort=pub_date&retmode=json",
+      "pubmed", count=20, note="PubMed 最新收录的期刊论文（E-utilities）", cat="医学顶刊"),
+
+    S("bjsm_rss", "BJSM 英国运动医学杂志", CROSSREF_API % "0306-3674", "crossref",
+      count=20, note="全球最权威运动医学刊 · 官网 RSS 已失效，改走 Crossref 元数据", cat="运动科学"),
+    S("jsms", "JSMS 运动科学与医学", "https://rss.sciencedirect.com/publication/science/14402440",
+      "rss", count=20, note="澳大利亚运动医学 · Elsevier RSS", cat="运动科学"),
+    S("ptsport", "Physical Therapy in Sport",
+      "https://rss.sciencedirect.com/publication/science/1466853X", "rss", count=20,
+      note="Elsevier RSS", cat="运动科学"),
+    S("carm", "中国康复医学杂志", "http://www.carm.org.cn/", "auto", count=20,
+      note="国内康复医学核心刊（HTML 列表页）", cat="运动科学"),
+
+    S("jfe", "JFE 金融经济学", "https://rss.sciencedirect.com/publication/science/0304405X",
+      "rss", count=20, note="Elsevier RSS", cat="经济期刊"),
+    S("jpube", "J Public Economics", "https://rss.sciencedirect.com/publication/science/00472727",
+      "rss", count=20, note="Elsevier RSS", cat="经济期刊"),
+    S("jde", "J Development Economics", "https://rss.sciencedirect.com/publication/science/03043878",
+      "rss", count=20, note="Elsevier RSS", cat="经济期刊"),
+    S("jie", "J International Economics", "https://rss.sciencedirect.com/publication/science/00221996",
+      "rss", count=20, note="Elsevier RSS", cat="经济期刊"),
+    S("mwm", "管理世界", "http://www.mwm.net.cn/", "auto", count=20,
+      note="CSSCI 权威刊（HTML 列表页）", cat="经济期刊"),
+
+    S("oschina_news", "开源中国·资讯", "https://www.oschina.net/news/rss", "rss", count=20,
+      note="OSCHINA 官方资讯 RSS", search="https://www.oschina.net/search?scope=news&q={q}",
+      cat="开源"),
+    # M5.2/V6.9：SourceForge 官方博客被 Cloudflare 挡（云端 403），换成三个云端实测可通的替代
+    S("github_blog", "GitHub Blog", "https://github.blog/feed/", "rss", count=15,
+      note="GitHub 官方博客（云端实测 10 条）", search="", cat="开源"),
+    S("lwn", "LWN 内核周报", "https://lwn.net/headlines/rss", "rss", count=15,
+      note="LWN.net 头条（云端实测 15 条）", search="", cat="开源"),
+    S("phoronix", "Phoronix 硬件开源", "https://www.phoronix.com/rss.php", "rss", count=20,
+      note="Phoronix Linux 硬件/驱动资讯（云端实测 32 条）", search="", cat="开源"),
+    S("gitea_blog", "Gitea 发布", "https://blog.gitea.io/index.xml", "rss", count=15,
+      note="轻量自建 Git 平台版本动态", cat="开源"),
+    S("atlassian_blog", "Atlassian（Bitbucket）动态", "https://blog.atlassian.com/rss/", "rss",
+      count=15, note="Bitbucket 所属平台官方博客", cat="开源"),
+]
+
+# ---------------------------------------------------------------- 学术期刊官网（V7.9.3）
+# 用户点名要的「经济期刊」补充源：不是热榜站，要的是当期目录 / 最新论文 / 通知公告里的
+# 文章题目，按网站自己的发布时间排序（不按热度、不按点击）。
+DEFAULT_SOURCES += [
+    S("econ_iwep", "世界经济与政治研究所", "http://ejournaliwep.cssn.cn/", "iwep", count=20,
+      note="最新文章（《世界经济》《国际经济评论》等），按发布时间排序", cat="经济期刊"),
+    S("econ_erj", "经济研究", "https://api.ajcass.com/api/SiteWebApi/GetCurrentPeriod"
+      "?JournalID=201803050001", "ajcass", count=20,
+      note="当期目录（官方接口，含卷期与作者），按当期目录顺序", cat="经济期刊",
+      search="https://erj.ajcass.com/"),
+    S("econ_jryj", "金融研究", "http://www.jryj.org.cn/CN/1002-7246/current.shtml", "jryj", count=20,
+      note="当期目录（含出版日期），只取文章题目", cat="经济期刊"),
+    S("econ_cie", "中国工业经济", "https://ciejournal.ajcass.com/", "cie", count=20,
+      note="当期目录（文章页），只取文章题目", cat="经济期刊"),
+    S("econ_cfrn", "金融学术（CFRN）", "https://www.cfrn.com.cn/lw/index.html", "cfrn", count=20,
+      note="「最新论文」栏目文章", cat="经济期刊"),
+    S("econ_nopss", "哲学社会科学·通知公告",
+      "http://www.nopss.gov.cn/GB/219469/index.html", "nopss", count=20,
+      note="通知公告栏目，按发布时间倒序", cat="经济期刊"),
+    S("econ_gjjryj", "国际金融研究", "http://www.gjjryj.org.cn/CN/home", "gjjryj", count=20,
+      note="最新当期目录（含年/期），只取中文标题", cat="经济期刊"),
+    # 以下 2 个站是纯前端 / JS 人机校验：改用本机浏览器内核渲染后取内容（V7.9.6）
+    S("econ_las", "智能制造·智库报告",
+      "https://portal.las.ac.cn/reportFront/reportForIndustry?serverId=45", "las", count=20,
+      note="中科院文献情报中心智库报告（浏览器渲染抓取，按时间倒序）", cat="经济期刊"),
+    S("econ_nstl", "全球产业统计（NSTL）", "https://nstl.facisp.cn/", "nstl", count=20,
+      note="NSTL 产业统计·资源推荐（数据看板站，条目为馆藏报告）", cat="经济期刊"),
+    S("econ_kd", "国家自然科学基金·成果检索（经济）",
+      "https://kd.nsfc.cn/resultSearchList?s=%E7%BB%8F%E6%B5%8E", "kd",
+      count=20, note="基金成果题录（走站点检索接口，按发表年份倒序）", cat="经济期刊"),
+    S("econ_kd_re", "国家自然科学基金·成果检索（房地产）",
+      "https://kd.nsfc.cn/resultSearchList?s=%E6%88%BF%E5%9C%B0%E4%BA%A7", "kd", count=20,
+      note="基金成果题录（走站点检索接口，按发表年份倒序）", cat="经济期刊"),
+    S("econ_sci_jr", "SciEngine 检索·金融",
+      "https://www.sciengine.com/plat/search?queryField_a=%E9%87%91%E8%9E%8D", "sci", count=20,
+      note="SciEngine 检索结果（走站点检索接口，按出版日期倒序）", cat="经济期刊"),
+    S("econ_sci_jj", "SciEngine 检索·经济",
+      "https://www.sciengine.com/plat/search?queryField_a=%E7%BB%8F%E6%B5%8E", "sci", count=20,
+      note="SciEngine 检索结果（走站点检索接口，按出版日期倒序）", cat="经济期刊"),
+    S("econ_sci_sy", "SciEngine 检索·商业",
+      "https://www.sciengine.com/plat/search?queryField_a=%E5%95%86%E4%B8%9A", "sci", count=20,
+      note="SciEngine 检索结果（走站点检索接口，按出版日期倒序）", cat="经济期刊"),
+]
+
+# ---------------------------------------------------------------- M9.2/V7.9.13：新增分类（M9.1 基础上清理失效源）
+# 数据格式：(分类名, [(源id, 显示名, 官网地址, 解析器, 备注), ...])
+# 解析器写 issn:XXXX-XXXX 的走 Crossref 公开元数据（付费墙期刊站也能取到最新论文标题）
+_NEW_CATS = [
+    ('宏观政策', [
+        ('macro_gov', '中国政府网', 'https://www.gov.cn/', 'html', '国务院政策文件·解读·公报'),
+        ('macro_ndrc', '国家发改委', 'https://www.ndrc.gov.cn/', 'html', '宏观政策·产业规划·价格'),
+        ('macro_pbc', '中国人民银行', 'https://www.pbc.gov.cn/goutongjiaoliu/113456/113469/index.html',
+         'pbc', '沟通交流·新闻栏目（新闻发布页题目）'),
+        ('macro_mof', '财政部', 'http://www.mof.gov.cn/zhengwuxinxi/zhengcefabu/',
+         'mof', '新闻报道·政策发布'),
+        ('macro_cctv', '央视新闻', 'https://news.cctv.com/2019/07/gaiban/cmsdatainterface/page/economy_zixun_1.jsonp',
+         'cctv_econ', '经济频道·经济资讯'),
+        ('macro_yicai', '第一财经', 'https://www.yicai.com/', 'html', '政策市场化解解读'),
+        ('macro_caixin', '财新', 'https://economy.caixin.com/', 'caixin', '经济频道·头条与要闻'),
+        # V7.9.14：国资委从「产业赛道」迁入宏观政策
+        ('ind_sasac', '国资委', 'http://www.sasac.gov.cn/', 'html', '重大产业项目·产业链'),
+    ]),
+    ('前沿 AI', [
+        ('ai_aiera', '新智元', 'https://aiera.com.cn/', 'html', '行业热点·模型动态'),
+        ('ai_infoq', 'InfoQ', 'https://www.infoq.cn/', 'html', 'AI 工程·技术落地'),
+        ('ai_arxiv', 'arXiv', 'https://arxiv.org/list/cs.AI/recent', 'html', '论文一手源头'),
+        ('ai_openreview', 'OpenReview', 'https://openreview.net/', 'html', '论文评审与前沿讨论'),
+        ('ai_openai', 'OpenAI Blog', 'https://openai.com/news/rss.xml', 'rss', '官方研究与产品更新·换官方 RSS'),
+        ('ai_google', 'Google AI Blog', 'https://blog.google/technology/ai/', 'html', '谷歌 AI 前沿'),
+        ('ai_venturebeat', 'VentureBeat', 'https://venturebeat.com/', 'html', 'AI 产业分析'),
+        ('ai_verge', 'The Verge', 'https://www.theverge.com/', 'html', 'AI·产品动态'),
+        ('ai_mit', 'MIT Tech Review', 'https://www.technologyreview.com/', 'html', '长期技术趋势'),
+    ]),
+    ('生物前沿', [
+        ('bio_nature', 'Nature', 'https://www.nature.com/', 'issn:0028-0836', '生命科学顶刊'),
+        ('bio_science', 'Science', 'https://www.science.org/', 'issn:0036-8075', '综合科学前沿'),
+        ('bio_cell', 'Cell', 'https://www.cell.com/', 'issn:0092-8674', '细胞与生命突破'),
+        ('bio_frontiers', 'Frontiers', 'https://www.frontiersin.org/', 'html', '开放获取生物医学'),
+        ('bio_bmc', 'BioMedCentral', 'https://www.biomedcentral.com/', 'html', '生命科学期刊'),
+        ('bio_geneng', 'GEN 生物技术', 'https://www.genengnews.com/', 'html', '生物技术产业'),
+        ('bio_stat', 'STAT News', 'https://www.statnews.com/', 'html', '医疗前沿深度'),
+    ]),
+    ('心理学刊', [
+        ('psy_acta', '心理学报', 'https://journal.psych.ac.cn/xlxb/CN/0439-755X/home.shtml', 'html', '国内权威心理顶刊'),
+        ('psy_frontiers', 'Frontiers in Psychology', 'https://www.frontiersin.org/journals/psychology', 'html', '国际开放心理刊'),
+        ('psy_review', 'Psychological Review', 'https://psycnet.apa.org/', 'issn:0033-295X', '经典综述刊'),
+        ('psy_annual', 'Annual Review of Psychology', 'https://www.annualreviews.org/journal/psych', 'issn:0066-4308', '年度综述'),
+        ('psy_jpsp', 'JPSP 人格与社会心理', 'https://www.apa.org/pubs/journals/psp', 'issn:0022-3514', '社会人格顶刊'),
+        ('psy_bbs', 'Behavioral and Brain Sciences', 'https://www.cambridge.org/core/journals/behavioral-and-brain-sciences', 'issn:0140-525X', '心理与神经跨学科'),
+    ]),
+    ('历史深度', [
+        ('hist_qinghistory', '中华文史网', 'https://www.qinghistory.cn/', 'html', '权威历史综合站'),
+        ('hist_nlc', '国家图书馆', 'https://www.nlc.cn/', 'html', '古籍资源·文献档案'),
+        ('hist_modern', '近代史研究', 'http://jds.cass.cn/', 'html', '近代史权威刊'),
+        ('hist_natgeo', 'National Geographic History', 'https://www.nationalgeographic.com/history', 'html', '世界史深度'),
+        ('hist_historynet', 'HistoryNet', 'https://www.historynet.com/', 'html', '历史专题'),
+        ('hist_fordham', 'Fordham 史料库', 'https://sourcebooks.fordham.edu/', 'html', '互联网历史史料库'),
+        ('hist_channel', 'History Channel', 'https://www.history.com/', 'html', '历史专题报道'),
+    ]),
+    ('楼市基建', [
+        ('real_mohurd', '住建部', 'https://www.mohurd.gov.cn/', 'html', '房地产·基建顶层政策'),
+        ('real_mohurdic', '住建部信息中心', 'https://www.mohurdic.org.cn/', 'html', '住建·城市基建'),
+        ('real_fangchan', '中房网', 'http://www.fangchan.com/news/', 'fangchan', '中国房协·新闻资讯'),
+        ('real_leju', '乐居财经', 'https://www.leju.com/', 'html', '楼市·房企动态'),
+        ('real_guandian', '观点地产网', 'https://www.guandian.cn/', 'html', '地产与基建观点'),
+        ('real_constructiondive', 'Construction Dive', 'https://www.constructiondive.com/feeds/news/', 'rss', '海外基建资讯·换 RSS'),
+    ]),
+    ('能源电力', [
+        ('energy_nea', '国家能源局', 'https://www.nea.gov.cn/', 'html', '能源顶层政策与统计'),
+        ('energy_cpnn', '中国能源新闻网', 'https://cpnn.com.cn/', 'html', '能源行业权威媒体'),
+        ('energy_cp', '中国电力报', 'https://www.cpnn.com.cn/', 'html', '电力专业资讯'),
+        ('energy_cnenergynews', '中国能源网', 'https://www.cnenergynews.cn/', 'html', '能源产业动态'),
+        ('energy_nea_cn', '中国核能行业协会', 'https://www.china-nea.cn/', 'html', '核能前沿'),
+        ('energy_global', 'Energy Global', 'https://www.energyglobal.com/', 'html', '全球能源产业'),
+    ]),
+    ('创业投融资', [
+        ('vc_pedaily', '投资界', 'https://www.pedaily.cn/', 'html', '线下创投门户'),
+        ('vc_chinaventure', '投中网', 'https://www.chinaventure.com.cn/', 'html', '创投深度与数据'),
+        ('vc_cyzone', '创业邦', 'https://www.cyzone.cn/', 'html', '早期融资'),
+        ('vc_news_cyzone', '新芽', 'https://news.cyzone.cn/', 'html', '投融资讯'),
+        ('vc_crunchbase', 'Crunchbase News', 'https://news.crunchbase.com/', 'html', '海外融资'),
+        ('vc_vnext', '科技成长路线图', 'https://www.v-next.cn/', 'html', '科创融资路演'),
+    ]),
+    ('学术顶刊', [
+        ('acad_nature', 'Nature', 'https://www.nature.com/', 'issn:0028-0836', '综合科学顶刊'),
+        ('acad_science', 'Science', 'https://www.science.org/', 'issn:0036-8075', '综合科学顶刊'),
+        ('acad_cell', 'Cell', 'https://www.cell.com/', 'issn:0092-8674', '生命科学顶刊'),
+        ('acad_lancet', 'The Lancet', 'https://www.thelancet.com/', 'issn:0140-6736', '医学顶刊'),
+        ('acad_jama', 'JAMA', 'https://jamanetwork.com/', 'issn:0098-7484', '医学顶刊'),
+        ('acad_pnas', 'PNAS', 'https://www.pnas.org/', 'issn:0027-8424', '美国国家科学院院刊'),
+        ('acad_advmat', 'Advanced Materials', 'https://onlinelibrary.wiley.com/journal/15214095', 'issn:0935-9648', '材料顶刊'),
+        ('acad_acs_nano', 'ACS Nano', 'https://pubs.acs.org/journal/ancac3', 'issn:1936-0851', '纳米材料'),
+        ('acad_qje', 'QJE 经济学季刊', 'https://academic.oup.com/qje', 'issn:0033-5533', '经济学顶刊'),
+        ('acad_psychrev', 'Psychological Review', 'https://psycnet.apa.org/', 'issn:0033-295X', '心理学顶刊'),
+    ]),
+    ('汽车产业', [
+        ('auto_caam', '中国汽车工业协会', 'http://www.caam.org.cn/', 'html', '产销数据与政策'),
+        ('auto_cnautonews', '中国汽车报网', 'http://www.cnautonews.com/', 'html', '汽车产业权威媒体'),
+        ('auto_dongchedi', '懂车帝', 'https://www.dongchedi.com/', 'html', '新车·新能源资讯'),
+        ('auto_autohome', '汽车之家', 'https://www.autohome.com.cn/', 'html', '汽车垂直门户'),
+        ('auto_pcauto', '太平洋汽车网', 'https://www.pcauto.com.cn/', 'html', '汽车垂直资讯'),
+        ('auto_gasgoo', '盖世汽车', 'https://www.gasgoo.com/', 'html', '零部件与供应链'),
+        ('auto_sae', '中国汽车工程学会', 'https://www.sae-china.org/', 'html', '技术路线与学术'),
+        ('auto_topspeed', 'TopSpeed', 'https://www.topspeed.com/', 'html', '新车与车展'),
+    ]),
+    ('材料科学刊', [
+        ('mat_natmat', 'Nature Materials', 'https://www.nature.com/nmat', 'issn:1476-1122', '材料顶刊'),
+        ('mat_advmat', 'Advanced Materials', 'https://onlinelibrary.wiley.com/journal/15214095', 'issn:0935-9648', '材料顶刊'),
+        ('mat_acs_nano', 'ACS Nano', 'https://pubs.acs.org/journal/ancac3', 'issn:1936-0851', '纳米材料'),
+        ('mat_today', 'Materials Today', 'https://www.journals.elsevier.com/materials-today', 'issn:1369-7021', '材料综述'),
+        ('mat_natnano', 'Nature Nanotechnology', 'https://www.nature.com/nnano', 'issn:1748-3387', '纳米科技'),
+        ('mat_aem', 'Advanced Energy Materials', 'https://onlinelibrary.wiley.com/journal/16146840', 'issn:1614-6832', '能源材料'),
+        ('mat_frontiers', 'Frontiers in Materials', 'https://www.frontiersin.org/journals/materials', 'issn:2296-8016', '开放获取材料刊'),
+        ('mat_jmst', 'J. Mater. Sci. Technol.', 'https://www.journals.elsevier.com/journal-of-materials-science-and-technology', 'issn:1005-0302', '材料科学与技术'),
+    ]),
+    ('环境生态刊', [
+        ('env_natsustain', 'Nature Sustainability', 'https://www.nature.com/natsustain', 'issn:2398-9629', '可持续顶刊'),
+        ('env_est', 'Environmental Science & Technology', 'https://pubs.acs.org/journal/esthag', 'issn:0013-936X', '环境科学顶刊'),
+        ('env_pollution', 'Environmental Pollution', 'https://www.journals.elsevier.com/environmental-pollution', 'issn:0269-7491', '环境污染'),
+        ('env_natwater', 'Nature Water', 'https://www.nature.com/nwater', 'issn:2731-6084', '水资源顶刊'),
+        ('env_nclimate', 'Nature Climate Change', 'https://www.nature.com/nclimate', 'issn:1758-678X', '气候变化'),
+        ('env_waterres', 'Water Research', 'https://www.journals.elsevier.com/water-research', 'issn:0043-1354', '水环境顶刊'),
+        ('env_hjkx', '环境科学学报', 'https://www.hjkx.ac.cn/', 'html', '国内环境科学核心刊'),
+        ('env_ehp', 'Environmental Health Perspectives', 'https://ehp.niehs.nih.gov/', 'issn:0091-6765', '环境健康'),
+        ('env_gcb', 'Global Change Biology', 'https://onlinelibrary.wiley.com/journal/13652486', 'issn:1354-1013', '全球变化生物学'),
+    ]),
+    ('公共卫生刊', [
+        ('pub_lancet_ph', 'Lancet Public Health', 'https://www.thelancet.com/journals/lanpub', 'issn:2468-2667', '公共卫生顶刊'),
+        ('pub_ajph', 'American Journal of Public Health', 'https://ajph.aphapublications.org/', 'issn:0090-0036', '美国公共卫生刊'),
+        ('pub_bmc_ph', 'BMC Public Health', 'https://bmcpublichealth.biomedcentral.com/', 'issn:1471-2458', '开放获取公卫刊'),
+        ('pub_epi', 'Epidemiology', 'https://journals.lww.com/epidemiology', 'issn:1044-3983', '流行病学'),
+        ('pub_frontiers', 'Frontiers in Public Health', 'https://www.frontiersin.org/journals/public-health', 'issn:2296-2565', '开放获取公卫刊'),
+        ('pub_jeph', 'J. Epidemiology and Global Health', 'https://www.journals.elsevier.com/journal-of-epidemiology-and-global-health', 'issn:2210-6006', '全球健康'),
+        ('pub_prevmed', 'Preventive Medicine', 'https://www.journals.elsevier.com/preventive-medicine', 'issn:0091-7435', '预防医学'),
+        ('pub_phr', 'Public Health Reports', 'https://www.publichealthreports.org/', 'issn:0033-3549', '公共卫生报告'),
+    ]),
+    ('神经科学刊', [
+        ('neuro_natneuro', 'Nature Neuroscience', 'https://www.nature.com/nneuro', 'issn:1097-6256', '神经科学顶刊'),
+        ('neuro_neuron', 'Neuron', 'https://www.cell.com/neuron', 'issn:0896-6273', '神经科学顶刊'),
+        ('neuro_jn', 'Journal of Neuroscience', 'https://www.jneurosci.org/', 'issn:0270-6474', '神经科学会刊'),
+        ('neuro_frontiers', 'Frontiers in Neuroscience', 'https://www.frontiersin.org/journals/neuroscience', 'issn:1662-453X', '开放获取神经刊'),
+        ('neuro_nrn', 'Nature Reviews Neuroscience', 'https://www.nature.com/nrn', 'issn:1471-003X', '神经综述'),
+        ('neuro_cercor', 'Cerebral Cortex', 'https://academic.oup.com/cercor', 'issn:1047-3211', '大脑皮层'),
+        ('neuro_molbrain', 'Molecular Brain', 'https://molecularbrain.biomedcentral.com/', 'issn:1756-6606', '分子脑科学'),
+        ('neuro_brain', 'Brain', 'https://academic.oup.com/brain', 'issn:0006-8950', '神经病学顶刊'),
+    ]),
+    ('物理天文刊', [
+        ('phys_natphys', 'Nature Physics', 'https://www.nature.com/nphys', 'issn:1745-2473', '物理顶刊'),
+        ('phys_prl', 'Physical Review Letters', 'https://journals.aps.org/prl', 'issn:0031-9007', '物理顶刊'),
+        ('phys_wulixb', '物理学报', 'https://wulixb.iphy.ac.cn/', 'html', '国内物理核心刊'),
+        ('phys_aa', 'Astronomy & Astrophysics', 'https://www.aanda.org/', 'issn:0004-6361', '天文学顶刊'),
+        ('phys_nastron', 'Nature Astronomy', 'https://www.nature.com/nastron', 'issn:2397-3366', '天文学顶刊'),
+        ('phys_prx', 'Physical Review X', 'https://journals.aps.org/prx', 'issn:2160-3308', '开放获取物理刊'),
+        ('phys_mnras', 'MNRAS', 'https://academic.oup.com/mnras', 'issn:0035-8711', '皇家天文学会月报'),
+        ('phys_cqg', 'Classical and Quantum Gravity', 'https://iopscience.iop.org/journal/02649381', 'issn:0264-9381', '引力与量子引力'),
+    ]),
+    ('化学化工刊', [
+        ('chem_natchem', 'Nature Chemistry', 'https://www.nature.com/nchem', 'issn:1755-4330', '化学顶刊'),
+        ('chem_jacs', 'JACS', 'https://pubs.acs.org/journal/jacsat', 'issn:0002-7863', '化学顶刊'),
+        ('chem_anal', 'Analytical Chemistry', 'https://pubs.acs.org/journal/ancham', 'issn:0003-2700', '分析化学顶刊'),
+        ('chem_chemrxiv', 'ChemRxiv', 'https://api.crossref.org/works?filter=prefix:10.26434&rows=20&sort=published&order=desc&select=title,DOI,published,published-online,issued,container-title', 'crossref', '化学预印本·换 Crossref 预印本'),
+        ('chem_huaxue', '化学学报', 'http://www.ccspublishing.org.cn/', 'html', '国内化学核心刊'),
+        ('chem_angew', 'Angewandte Chemie', 'https://onlinelibrary.wiley.com/journal/15213773', 'issn:1433-7851', '化学顶刊'),
+        ('chem_iecr', 'Ind. & Eng. Chem. Research', 'https://pubs.acs.org/journal/iecred', 'issn:0888-5885', '工业化学工程'),
+    ]),
+    ('农林食品刊', [
+        ('agri_natfood', 'Nature Food', 'https://www.nature.com/nfood', 'issn:2662-1355', '食品顶刊'),
+        ('agri_jafc', 'J. Agricultural and Food Chemistry', 'https://pubs.acs.org/journal/jafcau', 'issn:0021-8561', '农食化学顶刊'),
+        ('agri_foodchem', 'Food Chemistry', 'https://www.journals.elsevier.com/food-chemistry', 'issn:0308-8146', '食品化学顶刊'),
+        ('agri_tcsae', '农业工程学报', 'http://www.tcsae.org/', 'html', '国内农业工程核心刊'),
+        ('agri_jfp', 'Journal of Food Protection', 'https://www.jfoodprotection.org/', 'issn:0362-028X', '食品安全'),
+        ('agri_jas', 'Journal of Agricultural Science', 'https://www.cambridge.org/core/journals/journal-of-agricultural-science', 'issn:0021-8596', '农业科学'),
+        ('agri_aes', '农业环境科学学报', 'https://www.aes.org.cn/', 'html', '国内农业环境核心刊'),
+        ('agri_foodfunction', 'Food & Function', 'https://pubs.rsc.org/en/journals/journalissues/c9fo', 'issn:2042-6496', '食品功能'),
+    ]),
+    ('计算机理论刊', [
+        ('cs_acmcs', 'ACM Computing Surveys', 'https://dl.acm.org/journal/csur', 'issn:0360-0300', '计算机综述顶刊'),
+        ('cs_arxiv', 'arXiv 计算机理论', 'https://arxiv.org/list/cs.CC/recent', 'html', '预印本一手源头'),
+        ('cs_ieee_it', 'IEEE Trans. Information Theory', 'https://ieeexplore.ieee.org/xpl/RecentIssue.jsp?punumber=18', 'issn:0018-9448', '信息论顶刊'),
+        ('cs_toc', 'Theory of Computing', 'https://theoryofcomputing.org/', 'html', '计算理论开放刊'),
+        ('cs_jacm', 'Journal of the ACM', 'https://dl.acm.org/journal/jacm', 'issn:0004-5411', '计算机顶刊'),
+        ('cs_jos', '软件学报', 'https://www.jos.org.cn/', 'html', '国内软件顶刊'),
+        ('cs_siam', 'SIAM Journal on Computing', 'https://epubs.siam.org/journal/sico', 'issn:0097-5397', '计算理论顶刊'),
+        ('cs_cc', 'Computational Complexity', 'https://link.springer.com/journal/37', 'issn:1016-3328', '计算复杂性'),
+    ]),
+    ('法学与治理刊', [
+        ('law_hlr', 'Harvard Law Review', 'https://harvardlawreview.org/', 'issn:0017-811X', '法学顶刊'),
+        ('law_zgfx', '中国法学', 'https://zgfx.cbpt.cnki.net/', 'html', '国内法学顶刊'),
+        ('law_ejil', 'European Journal of International Law', 'https://ejil.org/', 'issn:0938-5428', '国际法顶刊'),
+        ('law_jilp', 'J. International Law and Politics', 'https://www.jilp.org/', 'html', '国际法与政治'),
+        ('law_ajil', 'American Journal of International Law', 'https://www.asil.org/ajil', 'issn:0002-9300', '国际法顶刊'),
+        ('law_icon', 'I·CON 国际宪法学杂志', 'https://www.ijcon.org/', 'issn:1474-2640', '宪法学'),
+    ]),
+    ('城市规划刊', [
+        ('urban_us', 'Urban Studies', 'https://journals.sagepub.com/home/usj', 'issn:0042-0980', '城市研究顶刊'),
+        ('urban_lup', 'Landscape and Urban Planning', 'https://www.journals.elsevier.com/landscape-and-urban-planning', 'issn:0169-2046', '景观与城市规划'),
+        ('urban_cities', 'Cities', 'https://www.journals.elsevier.com/cities', 'issn:0264-2751', '城市研究'),
+        ('urban_planners', '规划师', 'http://www.planners.com.cn/magazine.html', 'planners',
+         '最新一期·杂志目录导读'),
+        ('urban_jupd', 'J. Urban Planning and Development', 'https://ascelibrary.org/journal/jupddm', 'issn:0733-9488', '城市规划与开发'),
+        ('urban_mur', '现代城市研究', 'http://www.mur.cn/Columns/list120.html', 'mur',
+         '检索浏览·土地与房地产'),
+        ('urban_ijurr', 'IJURR', 'https://onlinelibrary.wiley.com/journal/14682427', 'issn:0309-1317', '城市与区域研究'),
+    ]),
+    ('药学与药理刊', [
+        ('pharm_natmed', 'Nature Medicine', 'https://www.nature.com/nmed', 'issn:1078-8956', '医学顶刊'),
+        ('pharm_pharmrev', 'Pharmacological Reviews', 'https://pharmrev.aspetjournals.org/', 'issn:0031-6997', '药理综述顶刊'),
+        ('pharm_jmc', 'Journal of Medicinal Chemistry', 'https://pubs.acs.org/journal/jmed', 'issn:0022-2623', '药物化学顶刊'),
+        ('pharm_jpa', 'Journal of Pharmaceutical Analysis', 'https://www.journals.elsevier.com/journal-of-pharmaceutical-analysis', 'issn:2095-1779', '药物分析'),
+        ('pharm_jco', 'Journal of Clinical Oncology', 'https://ascopubs.org/journal/jco', 'issn:0732-183X', '肿瘤临床顶刊'),
+        ('pharm_nrco', 'Nature Reviews Clinical Oncology', 'https://www.nature.com/nrclinonc', 'issn:1759-4774', '肿瘤综述顶刊'),
+    ]),
+]
+
+
+
+# 隐藏分类：侧边栏不显示、源默认关闭不抓取（用户 11-17 指定）
+HIDDEN_CATS = ('前沿 AI', '生物前沿', '心理学刊', '历史深度', '能源电力', '创业投融资', '学术顶刊',
+               '汽车产业', '材料科学刊', '公共卫生刊', '神经科学刊', '物理天文刊', '化学化工刊',
+               '农林食品刊', '计算机理论刊', '法学与治理刊', '药学与药理刊')   # V8.0.0：共 17 个
+
+_NEW_SRC_IDS = set()
+for _c, _rows in _NEW_CATS:
+    if _c not in CATS:
+        CATS.append(_c)
+    for _sid, _nm, _u, _p, _note in _rows:
+        if _sid in _NEW_SRC_IDS or any(x['id'] == _sid for x in DEFAULT_SOURCES):
+            continue
+        _NEW_SRC_IDS.add(_sid)
+        if _p.startswith('issn:'):
+            _u, _p = CROSSREF_API % _p[5:], 'crossref'
+        _hid = _c in HIDDEN_CATS      # 隐藏分类：不显示也不抓取
+        if _hid:
+            _note = _note + '·分类已隐藏，默认关闭'
+        DEFAULT_SOURCES.append(S(_sid, _nm, _u, _p, count=20, enabled=not _hid,
+                                 note=_note, cat=_c))
+# M5.6/V7.3：官方下架的源（用户点名去除）；任何旧配置里残留的都会在加载时被清掉
+_REMOVED_SRC = frozenset(["smzdm", "xueqiu", "cls", "cls_news", "iqiyi", "youpin", "360hot",
+                          "erj", "jryj", "cie",          # V7.9.3：这三个已换成 econ_* 专用解析源
+                          # M8.1：用户要求三端移除
+                          "zhihudaily", "36kr", "kr36_hot", "thepaper_rss",
+                          "douban_group", "douban_movie"])
+# M8.4：原来「抓不到但挂着」的那批源已被用户点名删除（见 REMOVED_SOURCES），
+# 清单清空；保留这个集合给以后需要强制停用的源用。
+_FORCE_OFF = frozenset()
+
 
 DEFAULT_SETTINGS = {
     "view": "image",         # image / text
     "theme": "light",        # light / dark
-    "perSource": 10,         # 全局每源条数（源可单独覆盖）
+    "perSource": 20,         # 全局每源条数（源可单独覆盖）
     "autoRefresh": 10,       # 分钟，0=关闭
     "fontFamily": "",        # 空=系统默认
     "fontScale": 1.0,
@@ -274,11 +928,324 @@ DEFAULT_SETTINGS = {
     "showOnlyOk": True,      # 仅显示抓取成功的源
     "startupCheck": True,    # 启动时强制刷新并自动隐藏失败源
     "accent": "",            # 主题配色：空=经典红 / blue / green / violet / cyan / rose / amber
-    "translate": "auto",
+    "translate": "off",      # V7.9.14：翻译默认关闭
     "region": "",            # 地区新闻：省份或「省份 城市」，空=关闭
-    "boardCount": 10,        # 总览看板每源条数
+    "boardCount": 15,        # 总览看板每源条数
+    "boardCols": 4,          # 看板列数：0=自动，1~12
+    "boardRows": 2,          # 看板行数：1~6
+    "orderVer": 0,           # 源默认顺序迁移标记（内部用）
     "srcLocked": False,      # 锁定新闻源：开关不可改，失败源不自动隐藏
+    "cats": list(CATS),      # 新闻源分类（用户可自行增删改）
+    "hideCats": list(HIDDEN_CATS),  # 侧边栏隐藏的分类（源保留但关闭不抓取）
+    "unhideCats": [],        # 用户手动「恢复显示」过的分类，后端不再自动压回 hideCats
+    "srcDeleted": [],        # 用户主动删掉的内置源 id：版本升级不再自动补回
+    "cookies": {},           # M5.8/V7.5：用户自供 Cookie（{"域名后缀": "k=v; ..."}，仅桌面注入）
+    "notifySec": 0,          # 抓取失败通知条：0=不通知（默认关闭），可选 3~20 秒
+    "titleTrans": False,     # 英文标题翻译行默认关闭（可在设置里开启）
+    # V7.9.3：推广分类页（推荐页）——展示形式与文案都可定制
+    "adStyle": "card",       # card 大卡片 / banner 横幅 / row 列表行
+    "adWarm": "你的支持，是我一直更新下去的最大动力 ❤",
+    "adWarmSub": "如果这里的内容帮到了你，也欢迎把这块位置留给值得被看见的产品。",
+    "adTitle": "作者其他软件 · 美拍姿势库（安卓 APK）",
+    "adDesc": "1700+ 宫格图片，拒绝拍照尴尬，记录每一份美好。",
+    "adUrl": "https://pan.baidu.com/s/5gZ0hq4QQPHVSmFj_XYwnnA",
+    "adContact": "Q&V：460275097",
 }
+
+
+# ---------------------------------------------------------------- 腾讯云 CloudBase（M8.0 账号与云同步）
+# 纯标准库 HTTP 客户端：邮箱注册/登录/验证码/找回密码 + 配置 JSON 云同步
+# 接口文档：https://docs.cloudbase.net/http-api/auth/*
+CB_ENV = "quickest-ocelot-d9fti0mr03ae447f"
+CB_BASE = "https://%s.api.tcloudbasegateway.com" % CB_ENV
+# 匿名访问（反馈提交/公开列表）用的 publishable key（公开性质，可随客户端分发）
+CB_PUBKEY = (
+    "eyJhbGciOiJSUzI1NiIsImtpZCI6IjNhNDAwMWE4LTEzMWItNDM4My1iZDY1LTQ2YmQ5OGM3N2UwZCJ9."
+    "eyJpc3MiOiJodHRwczovL3F1aWNrZXN0LW9jZWxvdC1kOWZ0aTBtcjAzYWU0NDdmLmFwLXNoYW5naGFpLnRjYi1hcGkudGVuY2VudGNsb3VkYXBpLmNvbSIsInN1YiI6ImFub24iLCJhdWQiOiJxdWlja2VzdC1vY2Vsb3QtZDlmdGkwbXIwM2FlNDQ3ZiIsImV4cCI6NDA5ODEzODU5NSwiaWF0IjoxNzk0NDU1Mzk1LCJub25jZSI6ImxZQ2h3NTREU3BlRXJjTUthd1BMdEEiLCJhdF9oYXNoIjoibFlDaHc1NERTcGVFcmNNS2F3UEx0QSIsIm5hbWUiOiJBbm9ueW1vdXMiLCJzY29wZSI6ImFub255bW91cyIsInByb2plY3RfaWQiOiJxdWlja2VzdC1vY2Vsb3QtZDlmdGkwbXIwM2FlNDQ3ZiIsIm1ldGEiOnsicGxhdGZvcm0iOiJQdWJsaXNoYWJsZUtleSJ9LCJyb2xlIjoiYW5vbiIsImlzX2Fub255bW91cyI6dHJ1ZSwiYXBwX21ldGFkYXRhIjp7InByb3ZpZGVyIjoiYW5vbnltb3VzIiwicHJvdmlkZXJzIjpbImFub255bW91cyJdfSwidXNlcl9tZXRhZGF0YSI6eyJuYW1lIjoiQW5vbnltb3VzIn0sInVzZXJfdHlwZSI6IiIsImNsaWVudF90eXBlIjoiY2xpZW50X3VzZXIiLCJpc19zeXN0ZW1fYWRtaW4iOmZhbHNlfQ."
+    "szuraJYjk8--IbESgWZLWM-GcmzOEhgs6MY8VH0MKnTptz8vACdygmc-20b-j52aQk9ptPyZTHIUK7eR0tO1hQcEWzWi46pA0bYUMnz_RYkykTuf5_rrgK1GeU7ybkoiTApmBB4L59hYkARQVjEetfqV_naajJQXCIpIsp3Ug8vVmt0JKj1WW7YsXIhd77tns19g-VFsHX2st7d_cF15e7Xg1G9CVz4-j7dUySOiahZe2gvKN014FE5KIciOaPBsWljm_2PUvoAl-ex6-elX5why5o7i47rPGlKNAmGjr2ulURjPxPqDyIlvdzODq79YVkuu5HtglipMJkc6tp2ncg"
+)
+AUTH_PATH = os.path.join(data_dir(), "热榜助手账号.json")
+FEEDBACK_ADMIN_EMAIL = "460275097@qq.com"   # 管理员：登录此邮箱可审核建议/反馈、改推广位
+# V7.9.4：推广位（推荐页广告）只允许作者改。这些字段存服务端，所有客户端只读。
+AD_KEYS = ("adStyle", "adWarm", "adWarmSub", "adTitle", "adDesc", "adUrl", "adContact")
+
+
+_ADMIN_CACHE = {"ts": 0.0, "ok": False}
+
+
+def is_admin():
+    """当前进程是否处于「作者本人已登录」状态。
+    必须是有效登录态（token 可用或能续期），不能只看残留的用户信息，
+    否则作者登录过一次后服务端会一直以为是管理员，谁都能改推广位。"""
+    now = time.time()
+    if now - _ADMIN_CACHE["ts"] < 20:
+        return bool(_ADMIN_CACHE["ok"])
+    ok = False
+    try:
+        u = ACCOUNT.user or {}
+        if (u.get("email") or "").strip().lower() == FEEDBACK_ADMIN_EMAIL.lower():
+            if ACCOUNT.access_token and now < (ACCOUNT.expires_at or 0):
+                ok = True
+            else:
+                ok = bool(ACCOUNT.resume())
+    except Exception:
+        ok = False
+    _ADMIN_CACHE["ts"], _ADMIN_CACHE["ok"] = now, ok
+    return ok
+
+
+def ad_block():
+    """推广位内容（作者在服务端设定，所有客户端拉取同一份）"""
+    s = CFG.settings or {}
+    return {k: s.get(k, DEFAULT_SETTINGS.get(k, "")) for k in AD_KEYS}
+
+
+def _cb_headers(token=None, extra=None):
+    h = {"Content-Type": "application/json", "Accept": "application/json",
+         "User-Agent": UA, "x-device-id": _device_id()}
+    if token:
+        h["Authorization"] = "Bearer " + token
+    elif CB_PUBKEY:
+        h["Authorization"] = "Bearer " + CB_PUBKEY   # 匿名角色（anon）
+    if extra:
+        h.update(extra)
+    return h
+
+
+def _cb_request(method, path, body=None, token=None, extra=None, timeout=15):
+    """CloudBase HTTP API 统一封装。返回 (ok, data_dict)；data_dict 含 error 描述。"""
+    url = CB_BASE + path
+    data = json.dumps(body or {}).encode("utf-8") if method in ("POST", "PATCH", "PUT") else None
+    req = urllib.request.Request(url, data=data, method=method,
+                                 headers=_cb_headers(token, extra))
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            raw = r.read()
+            out = json.loads(raw.decode("utf-8") or "{}") if raw else {}
+        return True, out
+    except urllib.error.HTTPError as e:
+        try:
+            out = json.loads(e.read().decode("utf-8") or "{}")
+        except Exception:
+            out = {}
+        desc = out.get("error_description") or out.get("error") or ("HTTP %s" % e.code)
+        return False, {"error": desc, "code": e.code, "raw": out}
+    except Exception as e:
+        return False, {"error": str(e) or e.__class__.__name__, "code": 0}
+
+
+def _device_id():
+    """设备码：识别设备，让不同电脑/手机的本地设置互不影响。"""
+    d = data_dir()
+    p = os.path.join(d, "设备码.txt")
+    try:
+        with open(p, "r", encoding="utf-8") as f:
+            did = f.read().strip()
+        if did:
+            return did
+    except Exception:
+        pass
+    did = "dev_" + hashlib.md5((socket.gethostname() + str(time.time())).encode()).hexdigest()[:20]
+    try:
+        with open(p, "w", encoding="utf-8") as f:
+            f.write(did)
+    except Exception:
+        pass
+    return did
+
+
+class Account:
+    """登录态与云端配置同步。凭证存本地 auth 文件，重启自动续期（记住登录状态）。"""
+
+    def __init__(self):
+        self.user = None          # {sub, email, nickname}
+        self.access_token = ""
+        self.refresh_token = ""
+        self.expires_at = 0
+        self._load()
+
+    # ---- 凭证持久化 ----
+    def _load(self):
+        try:
+            with open(AUTH_PATH, "r", encoding="utf-8") as f:
+                d = json.loads(f.read())
+            self.user = d.get("user")
+            self.access_token = d.get("access_token") or ""
+            self.refresh_token = d.get("refresh_token") or ""
+            self.expires_at = d.get("expires_at") or 0
+        except Exception:
+            pass
+
+    def _save(self):
+        try:
+            with open(AUTH_PATH, "w", encoding="utf-8") as f:
+                json.dump({"user": self.user, "access_token": self.access_token,
+                           "refresh_token": self.refresh_token,
+                           "expires_at": self.expires_at}, f, ensure_ascii=False)
+        except Exception:
+            pass
+
+    def _clear(self):
+        self.user, self.access_token, self.refresh_token, self.expires_at = None, "", "", 0
+        try:
+            os.remove(AUTH_PATH)
+        except Exception:
+            pass
+
+    def _apply_token(self, r):
+        """登录/注册/刷新响应 → 保存凭证。"""
+        self.access_token = r.get("access_token") or ""
+        self.refresh_token = r.get("refresh_token") or self.refresh_token
+        self.expires_at = time.time() + int(r.get("expires_in") or 7200) - 120
+        self._save()
+
+    # ---- 静默续期（下次打开软件自动登录） ----
+    def resume(self):
+        if not self.refresh_token:
+            return False
+        if self.access_token and time.time() < self.expires_at:
+            return bool(self.user)
+        # 尝试两种官方刷新端点（以实际生效者为准，见 /auth/v1/* 文档）
+        ok, r = _cb_request("POST", "/auth/v1/token",
+                            {"grant_type": "refresh_token", "refresh_token": self.refresh_token})
+        if not ok or not r.get("access_token"):
+            ok, r = _cb_request("POST", "/auth/v1/refresh_access_token",
+                                {"refresh_token": self.refresh_token})
+        if ok and r.get("access_token"):
+            self._apply_token(r)
+            return bool(self.user)
+        log("账号续期失败：%s" % (r.get("error") or "unknown"))
+        return False
+
+    # ---- 注册 / 登录 / 找回密码 ----
+    def send_code(self, email, exist_only=False):
+        """发送邮箱验证码。exist_only=True 用于找回密码（账号必须已注册）。"""
+        ok, r = _cb_request("POST", "/auth/v1/verification",
+                            {"email": email, "target": "USER" if exist_only else "ANY"})
+        if not ok:
+            return False, r.get("error") or "发送失败"
+        return True, {"vid": r.get("verification_id"), "is_user": bool(r.get("is_user"))}
+
+    def _verify_code(self, vid, code):
+        ok, r = _cb_request("POST", "/auth/v1/verification/verify",
+                            {"verification_id": vid, "verification_code": str(code)})
+        if not ok or not r.get("verification_token"):
+            return None, r.get("error") or "验证码错误"
+        return r.get("verification_token"), None
+
+    def register(self, email, code, vid, password, nickname):
+        vt, err = self._verify_code(vid, code)
+        if err:
+            return False, err
+        body = {"email": email, "verification_token": vt, "password": password}
+        if nickname:
+            body["username"] = nickname[:24]
+        ok, r = _cb_request("POST", "/auth/v1/signup", body)
+        if not ok:
+            return False, r.get("error") or "注册失败"
+        self._apply_token(r)
+        self.user = {"sub": r.get("sub"), "email": email, "nickname": nickname}
+        self._save()
+        return True, {}
+
+    def login(self, email, password):
+        # 邮箱密码登录：官方 signin 的 username 位置接受邮箱
+        ok, r = _cb_request("POST", "/auth/v1/signin", {"username": email, "password": password})
+        if not ok or not r.get("access_token"):
+            ok2, r2 = _cb_request("POST", "/auth/v1/signin", {"email": email, "password": password})
+            if ok2 and r2.get("access_token"):
+                ok, r = ok2, r2
+        if not ok or not r.get("access_token"):
+            return False, r.get("error") or "登录失败"
+        self._apply_token(r)
+        self.user = {"sub": r.get("sub"), "email": email}
+        self._save()
+        # 拉昵称（可选，失败不影响登录）
+        ok2, me = _cb_request("GET", "/auth/v1/user/me", token=self.access_token)
+        if ok2 and isinstance(me.get("user_metadata"), dict) and me["user_metadata"].get("name"):
+            self.user["nickname"] = me["user_metadata"]["name"]
+            self._save()
+        return True, {}
+
+    def logout(self):
+        if self.access_token:
+            _cb_request("POST", "/auth/v1/signout", {}, token=self.access_token)
+        self._clear()
+
+    def reset_password(self, email, code, vid, new_password):
+        """找回密码：邮箱验证码校验通过 → 直接设置新密码。
+        策略：① 先试专用重置端点；② 兜底用 verification_token 免密登录后改密。"""
+        vt, err = self._verify_code(vid, code)
+        if err:
+            return False, err
+        ok, r = _cb_request("POST", "/auth/v1/user/password/reset",
+                            {"verification_token": vt, "new_password": new_password,
+                             "confirm_password": new_password})
+        if ok:
+            return True, {}
+        # 兜底：验证码免密登录（这本身也是官方登录方式），登录后修改密码
+        ok2, r2 = _cb_request("POST", "/auth/v1/signin", {"verification_token": vt})
+        if ok2 and r2.get("access_token"):
+            self._apply_token(r2)
+            self.user = {"sub": r2.get("sub"), "email": email}
+            self._save()
+            ok3, r3 = _cb_request("PATCH", "/auth/v1/user/password",
+                                  {"new_password": new_password,
+                                   "confirm_password": new_password},
+                                  token=self.access_token)
+            if ok3:
+                return True, {}
+            return False, r3.get("error") or "新密码设置失败"
+        return False, r.get("error") or "重置失败"
+
+    # ---- 配置云同步（绑定账号的配置 JSON） ----
+    def _ensure_token(self):
+        if not self.user:
+            return False
+        if self.access_token and time.time() < self.expires_at:
+            return True
+        return self.resume()
+
+    def cloud_push(self, settings, favorites=None, custom_sources=None):
+        """把该账号的设置习惯上传云端（user_config 表，RLS 按用户隔离）。
+        节约云存储：自动同步只传 settings + favorites；只有手动「备份到云端」
+        才额外上传新增（非内置）的新闻源。浏览记录只存本地，不上传。"""
+        if not self._ensure_token():
+            return False, "未登录或登录已过期"
+        # V7.9.4：推广位不跟着账号云同步（作者在服务端唯一维护，避免账号配置把它覆盖掉）
+        # V8.0.2：窗口形式（openMode）属于本机习惯，不进云端，避免换端登录后被改成浏览器模式
+        settings = {k: v for k, v in (settings or {}).items()
+                    if k not in AD_KEYS and k != "openMode"}
+        payload = {"settings": settings, "favorites": favorites or [],
+                   "ver": APP_VER, "ts": time.time(), "device": _device_id()}
+        if custom_sources:
+            payload["custom_sources"] = custom_sources
+        body = {"user_id": self.user.get("sub"), "config": payload,
+                "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+        # PostgREST 风格 upsert：user_id 主键冲突时更新
+        ok, r = _cb_request("POST", "/v1/rdb/rest/user_config", body, token=self.access_token,
+                            extra={"Prefer": "resolution=merge-duplicates"})
+        if ok:
+            return True, {}
+        return False, r.get("error") or "上传失败"
+
+    def cloud_pull(self):
+        """拉取当前账号的云端配置 JSON；云端无配置时返回 (True, None)。"""
+        if not self._ensure_token():
+            return False, "未登录或登录已过期"
+        uid = urllib.parse.quote(str(self.user.get("sub") or ""))
+        ok, r = _cb_request("GET", "/v1/rdb/rest/user_config?user_id=eq.%s&select=config" % uid,
+                            token=self.access_token)
+        if not ok:
+            return False, r.get("error") or "下载失败"
+        rows = r if isinstance(r, list) else (r.get("data") or [])
+        if not rows:
+            return True, None
+        cfg = rows[0].get("config") or {}
+        return True, cfg
+
+
+ACCOUNT = Account()
 
 
 # 微信收款码（作者提供，内置默认；用户可在“关于”页替换或清除）
@@ -1057,6 +2024,7 @@ def deep_copy(o):
 
 class Config:
     def __init__(self):
+        self.is_new = False      # 本次启动前没有本地配置文件（全新安装）
         self.settings = deep_copy(DEFAULT_SETTINGS)
         self.sources = deep_copy(DEFAULT_SOURCES)
         self.favorites = []
@@ -1065,6 +2033,10 @@ class Config:
         self.load()
 
     def load(self):
+        try:
+            self.is_new = not os.path.exists(CONFIG_PATH)
+        except Exception:
+            self.is_new = False
         try:
             with open(CONFIG_PATH, "r", encoding="utf-8") as f:
                 raw = json.load(f)
@@ -1081,9 +2053,27 @@ class Config:
         if "qrImage" not in raw_st and DEFAULT_SETTINGS.get("qrImage"):
             # 旧配置升级：补上内置收款码（用户清除后不会恢复）
             self.settings["qrImage"] = DEFAULT_SETTINGS["qrImage"]
+        # V7.9：通知条默认改为 10 秒；旧默认 4 秒不在可选项里 → 视为未设置，跟着升级
+        try:
+            _ns = int(self.settings.get("notifySec"))
+        except Exception:
+            _ns = 4
+        if _ns not in (0, 3, 5, 8, 10, 15, 20):
+            self.settings["notifySec"] = 10
+            self.save()
         if isinstance(raw.get("sources"), list) and raw["sources"]:
             self.sources = self._norm_sources(raw["sources"])
-            if raw.get("presetVer") != APP_VER:
+            # M8.1：下线源无条件从旧配置里删除（不依赖 presetVer 是否变化）
+            _keep = [s for s in self.sources if s.get("id") not in REMOVED_SOURCES]
+            if len(_keep) != len(self.sources):
+                self.sources = _keep
+                _gone = list(self.settings.get("srcDeleted") or [])
+                for _sid in REMOVED_SOURCES:
+                    if _sid not in _gone:
+                        _gone.append(_sid)
+                self.settings["srcDeleted"] = _gone
+                self.save()
+            if raw.get("presetVer") != PRESET_VER:
                 # 版本升级：内置源的抓取规则随程序更新，用户的开关/顺序/条数保持不变
                 self._refresh_builtins()
                 self.save()
@@ -1091,9 +2081,88 @@ class Config:
             self.sources = deep_copy(DEFAULT_SOURCES)
         self.favorites = raw.get("favorites") or []
         self.history = raw.get("history") or []
+        # M8.2：一次性摘掉「国际新闻」「币圈」两个分类（含隐藏清单里的记录）
+        # 每次加载都无条件剔除（旧客户端保存设置时会把它们塞回来，所以不能只做一次）
+        _c = strip_drop_cats(self.settings.get("cats"))
+        if _c != list(self.settings.get("cats") or []):
+            self.settings["cats"] = _c
+            self.save()
+        if not self.settings.get("catDropVer"):
+            self.settings["hideCats"] = strip_drop_cats(self.settings.get("hideCats"))
+            self.settings["catDropVer"] = 1
+            self.save()
+        # M9.1：隐藏分类每次加载都强制生效——旧客户端/云同步把它们塞回来也照样压下去
+        #       （侧边栏不显示 + 源关闭不抓取；用户想用某个隐藏分类需在设置里重新开启）
+        _h = list(self.settings.get("hideCats") or [])
+        _unh = [c for c in (self.settings.get("unhideCats") or []) if isinstance(c, str)]
+        _m = [c for c in HIDDEN_CATS if c not in _h and c not in _unh]
+        if _m:
+            self.settings["hideCats"] = _h + _m
+            self.save()
+        # 按 hideCats 实际内容关闭源：用户点「恢复显示」把分类移出 hideCats 后，源不再被强关
+        _hs = set(self.settings.get("hideCats") or []) - {"推广"}   # 推广分类不可隐藏
+        if _hs != set(self.settings.get("hideCats") or []):
+            self.settings["hideCats"] = [c for c in (self.settings.get("hideCats") or []) if c != "推广"]
+            self.save()
+        _hc = False
+        for _s2 in self.sources:
+            # V8.0.2：一个源可以有多个分类，只要还有一个分类是显示的就不关
+            _sc = split_cat(_s2.get("cat"))
+            if _sc and all(c in _hs for c in _sc) and _s2.get("enabled"):
+                _s2["enabled"] = False
+                _hc = True
+        if _hc:
+            self.save()
+        # 老配置升级：源用到的分类若不在清单里（如新增「Agent」），自动纳入并持久化
+        cats = list(self.settings.get("cats") or [])
+        changed = False
+        # V8.0.2：「GitHub今日上升」同时属于「开源」「资源」
+        for s in self.sources:
+            if s.get("id") == "github":
+                _gc = split_cat(s.get("cat"))
+                for c in ("开源", "资源"):
+                    if c not in _gc:
+                        _gc.append(c)
+                _gj = ",".join(_gc)
+                if _gj != (s.get("cat") or ""):
+                    s["cat"] = _gj
+                    changed = True
+        for s in self.sources:
+            for c in split_cat(s.get("cat")):
+                if c and c not in cats:
+                    cats.append(c)
+                    changed = True
+        cats = strip_drop_cats(cats)
+        if changed or cats != list(self.settings.get("cats") or []):
+            self.settings["cats"] = cats
+            self.save()
+        # V7.9.3：「推广」分类是推荐页，不挂在任何源上，老配置升级时单独补进来
+        if "推广" not in (self.settings.get("cats") or []):
+            c2 = list(self.settings.get("cats") or [])
+            c2.append("推广")
+            self.settings["cats"] = c2
+            self.save()
+        # M8.1：源默认顺序一次性迁移（按用户指定顺序；之后手动拖动仍保留）
+        if not self.settings.get("orderVer"):
+            _ord = {sid: i for i, sid in enumerate(SOURCE_ORDER)}
+            self.sources.sort(key=lambda s: _ord.get(s.get("id"), len(SOURCE_ORDER)))
+            self.settings["orderVer"] = 1
+            self.save()
 
     @staticmethod
     def _norm_sources(srcs):
+        # V8.0.0：国资委随「产业赛道」一起下线时迁入宏观政策，别跟着整类清掉
+        srcs = [s for s in (srcs or [])]
+        for _s in srcs:
+            if isinstance(_s, dict) and _s.get("id") == "ind_sasac":
+                _c = [c for c in split_cat(_s.get("cat")) if c not in DROP_CATS]
+                if _c != split_cat(_s.get("cat")):
+                    _s["cat"] = join_cat(_c + ["宏观政策"]) if _c else "宏观政策"
+        # M8.2：整类下线的分类（国际新闻/币圈）连源带分类一起清掉
+        srcs = [s for s in (srcs or [])
+                if isinstance(s, dict)
+                and s.get("id") not in _REMOVED_SRC
+                and not any(c in DROP_CATS for c in split_cat(s.get("cat")))]
         out, used = [], set()
         for s in srcs:
             if not isinstance(s, dict) or not s.get("url"):
@@ -1110,8 +2179,11 @@ class Config:
                 "enabled": bool(s.get("enabled", True)),
                 "note": str(s.get("note") or "")[:80],
                 "search": str(s.get("search") or ""),
-                "cat": (str(s.get("cat") or "").strip() or "综合")
-                       if str(s.get("cat") or "").strip() in CATS else "综合",
+                # M5.8/V7.5：备用通道（主地址失败依次尝试），如 RSSHub 公共实例
+                "alt": [str(a).strip()[:300] for a in (s.get("alt") or []) if str(a or "").strip()][:5],
+                # V6.2：分类不再限定内置清单，用户可自定义任意分类
+                # V8.0.2：支持一个源多个分类（逗号分隔，最多 4 个）
+                "cat": join_cat(s.get("cat")),
             })
         return out
 
@@ -1122,25 +2194,41 @@ class Config:
     def _refresh_builtins(self):
         preset = {s["id"]: s for s in DEFAULT_SOURCES}
         have = {s["id"] for s in self.sources}
+        gone = set(self.settings.get("srcDeleted") or [])
+        # M8.1：下线源从用户配置里彻底删除，并记入 srcDeleted 防止被补回
+        keep = [s for s in self.sources if s.get("id") not in REMOVED_SOURCES
+                and not any(c in DROP_CATS for c in split_cat(s.get("cat")))]
+        if len(keep) != len(self.sources):
+            self.sources = keep
+        for sid in REMOVED_SOURCES:
+            gone.add(sid)
+        self.settings["srcDeleted"] = sorted(gone)
+        # M8.1：首次升级按新的默认顺序重排（用户之后手动拖动仍会保留）
+        if not self.settings.get("orderVer"):
+            self.sources.sort(key=lambda s: _SRC_RANK.get(s.get("id"), len(SOURCE_ORDER)))
+            self.settings["orderVer"] = 1
         for s in self.sources:
             d = preset.get(s["id"])
             if not d:
                 continue
             s["url"], s["parser"] = d["url"], d["parser"]
+            if s["id"] in _FORCE_OFF:      # M5.7/V7.4：需登录态的源，启动时强制关闭
+                s["enabled"] = False
             s["sel"], s["note"] = deep_copy(d["sel"]), d["note"]
             s["search"] = d["search"]
             s["name"] = d["name"]
+            # 分类统一由内置清单管理（用户要求：内置源跟着官方分类走）
             s["cat"] = d.get("cat") or "综合"
             if not s.get("count"):
                 s["count"] = d["count"]
-        # 版本升级时自动补上新增的内置源（用户原有的开关/顺序/条数保持不变）
+        # 版本升级时自动补上新增的内置源（用户删除过的不再补回）
         for d in DEFAULT_SOURCES:
-            if d["id"] not in have:
+            if d["id"] not in have and d["id"] not in gone:
                 self.sources.append(deep_copy(d))
 
     def save(self):
         with self._lock:
-            payload = {"version": 2, "app": APP_VER, "presetVer": APP_VER,
+            payload = {"version": 2, "app": APP_VER, "presetVer": PRESET_VER,
                        "settings": self.settings,
                        "sources": self.sources, "favorites": self.favorites,
                        "history": self.history}
@@ -1157,8 +2245,48 @@ class Config:
             for k, v in data["settings"].items():
                 if k in DEFAULT_SETTINGS:
                     self.settings[k] = v
+            self.settings["cats"] = strip_drop_cats(norm_cats(self.settings.get("cats")))
+            # V7.9.14：「推广」是广告位分类，不允许隐藏/删除（只能调整排序）
+            if "推广" not in self.settings["cats"]:
+                self.settings["cats"].append("推广")
+            _uh = self.settings.get("unhideCats")
+            self.settings["unhideCats"] = [str(x)[:24] for x in _uh if isinstance(x, str)] if isinstance(_uh, list) else []
+            _hh = self.settings.get("hideCats")
+            self.settings["hideCats"] = ([str(x)[:24] for x in _hh if isinstance(x, str)]
+                                         if isinstance(_hh, list) else [])
+            self.settings["hideCats"] = [c for c in self.settings["hideCats"] if c != "推广"]
+            # V8.0.1：旧客户端 / 旧本机副本提交上来的清单，不能把「版本默认隐藏」的分类弄丢
+            _cats = set(self.settings.get("cats") or [])
+            _lost = [c for c in HIDDEN_CATS
+                     if c not in self.settings["hideCats"]
+                     and c not in self.settings["unhideCats"]
+                     and (not _cats or c in _cats)]
+            if _lost:
+                self.settings["hideCats"] = list(self.settings["hideCats"]) + _lost
+            _ck = self.settings.get("cookies")          # M5.8/V7.5：Cookie 只收 str->str，最多 10 项
+            if not isinstance(_ck, dict):
+                _ck = {}
+            self.settings["cookies"] = {str(k)[:64]: str(v)[:2000]
+                                        for k, v in list(_ck.items())[:10] if str(v or "").strip()}
         if isinstance(data.get("sources"), list):
+            old = {s["id"] for s in self.sources}
+            builtin = {s["id"] for s in DEFAULT_SOURCES}
             self.sources = self._norm_sources(data["sources"])
+            new_ids = {s["id"] for s in self.sources}
+            gone = list(self.settings.get("srcDeleted") or [])
+            for sid in (old & builtin) - new_ids:      # 用户主动删掉的内置源
+                if sid not in gone:
+                    gone.append(sid)
+            for sid in list(gone):                      # 又被加回来就取消记录
+                if sid in new_ids:
+                    gone.remove(sid)
+            self.settings["srcDeleted"] = gone
+            cats = self.settings["cats"]                # 源用到的自定义分类自动纳入清单
+            for s in self.sources:
+                for c in split_cat(s.get("cat")):
+                    if c not in cats and len(cats) < CAT_MAXN:
+                        cats.append(c)
+            self.settings["cats"] = strip_drop_cats(cats)
         self.save()
         return {"settings": self.settings, "sources": self.sources}
 
@@ -1319,6 +2447,7 @@ def parse_html(text):
 # ---------------------------------------------------------------- 选择器
 
 _SEL_RE = re.compile(r"^([a-zA-Z0-9*]+)?((?:\.[\w-]+)*)((?:\[[^\]]*\])*)$")
+_ATTR_RE = re.compile(r"\[([\w-]+)(?:([~*^$|]?=)\s*[\"']?([^\"'\]]*)[\"']?)?\]")
 
 
 def _sel_step(step):
@@ -1337,10 +2466,23 @@ def _match(node, step):
         return False
     if classes and not all(node.has_cls(c) for c in classes):
         return False
-    for k, v in attrs:
+    for k, op, v in attrs:
         if k not in node.attrs:
             return False
-        if v and v not in (node.attrs.get(k) or ""):
+        val = node.attrs.get(k) or ""
+        if op in ("*=", "~="):        # 包含
+            if v and v not in val:
+                return False
+        elif op in ("^=",):           # 前缀
+            if v and not val.startswith(v):
+                return False
+        elif op in ("$=",):           # 后缀
+            if v and not val.endswith(v):
+                return False
+        elif op in ("=", "|="):
+            if v and v != val and not val.startswith(v + "-"):
+                return False
+        elif v and v not in val:
             return False
     return True
 
@@ -1387,13 +2529,24 @@ def node_img(node):
 _OPENERS = {}
 
 
-def _opener(referer=None):
-    key = referer or ""
+def _opener(referer=None, no_verify=False):
+    key = (referer or "") + ("|nv" if no_verify else "")
     if key in _OPENERS:
         return _OPENERS[key]
     import http.cookiejar
     jar = http.cookiejar.CookieJar()
-    op = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+    handlers = [urllib.request.HTTPCookieProcessor(jar)]
+    if no_verify:
+        # 证书链不完整的站点（大量 .gov.cn / 期刊官网）：跳过证书校验重试
+        try:
+            import ssl as _ssl
+            ctx = _ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = _ssl.CERT_NONE
+            handlers.append(urllib.request.HTTPSHandler(context=ctx))
+        except Exception:
+            pass
+    op = urllib.request.build_opener(*handlers)
     op.addheaders = [
         ("User-Agent", UA),
         ("Accept", "text/html,application/json,application/xhtml+xml,*/*;q=0.8"),
@@ -1406,17 +2559,94 @@ def _opener(referer=None):
     return op
 
 
+
+
+def _user_cookie_for(url):
+    """M5.8/V7.5：用户自供 Cookie（仅桌面版）。settings.cookies = {"域名后缀": "k=v; ..."}，
+    按域名后缀最长匹配注入到抓取请求。"""
+    try:
+        ck = CFG.settings.get("cookies")
+    except Exception:
+        return ""
+    if not isinstance(ck, dict) or not ck:
+        return ""
+    host = (urllib.parse.urlsplit(url).netloc or "").lower()
+    best = ""
+    for dom, v in ck.items():
+        d = str(dom or "").lower().lstrip(".").strip()
+        if not d:
+            continue
+        if (host == d or host.endswith("." + d)) and len(d) > len(best):
+            best = str(v or "").strip()
+    return best
+
+# M5.8/V7.5：域名级限速（礼貌抓取）——同一站点两次请求至少间隔 _DOM_GAP 秒
+_DOM_LK = threading.Lock()
+_DOM_LAST = {}
+_DOM_GAP = 0.6
+
+
+def _domain_throttle(url):
+    """学 tophub：按域名排队限速，避免 Crossref/百度这类一并发就 429 的站点被限流。"""
+    try:
+        netloc = urllib.parse.urlsplit(url).netloc
+    except Exception:
+        return
+    if not netloc:
+        return
+    while True:
+        with _DOM_LK:
+            now = time.time()
+            wait = _DOM_GAP - (now - _DOM_LAST.get(netloc, 0))
+            if wait <= 0:
+                _DOM_LAST[netloc] = now
+                return
+        time.sleep(min(wait, 1.0))
+
+
+def _is_cert_error(e):
+    """V7.8：识别 SSL 证书类错误（证书链不完整 / 自签名），触发免校验重试"""
+    while e is not None:
+        if isinstance(e, ssl.SSLError) or type(e).__name__ in (
+                "SSLCertVerificationError", "CertificateError"):
+            return True
+        reason = getattr(e, "reason", None)
+        if reason is e:
+            break
+        e = reason
+        if not isinstance(e, Exception):
+            break
+    return False
+
+
 def fetch_bytes(url, referer=None, timeout=14):
-    op = _opener(referer)
+    _domain_throttle(url)     # M5.8/V7.5：域名级限速
     req = urllib.request.Request(url)
     if referer:
         req.add_header("Referer", referer)
-    with op.open(req, timeout=timeout) as r:
-        raw = r.read()
-        enc = (r.headers.get("Content-Encoding") or "").lower()
-        ctype = (r.headers.get("Content-Type") or "").lower()
-        m = re.search(r"charset=([\w-]+)", ctype)
-        charset = m.group(1) if m else None
+    _ck = _user_cookie_for(url)      # M5.8/V7.5：用户自供 Cookie（按域名后缀匹配）
+    if _ck:
+        req.add_header("Cookie", _ck)
+    try:
+        op = _opener(referer)
+        with op.open(req, timeout=timeout) as r:
+            raw = r.read()
+            enc = (r.headers.get("Content-Encoding") or "").lower()
+            ctype = (r.headers.get("Content-Type") or "").lower()
+            m = re.search(r"charset=([\w-]+)", ctype)
+            charset = m.group(1) if m else None
+    except Exception as e:
+        if not _is_cert_error(e):
+            raise
+        _record_cert_issue(url, e)   # V7.8.1：记录证书问题站点，供「设置 → 证书修复」展示
+        # V7.8：证书验证失败 → 免校验重试（救活 .gov.cn、期刊官网等自签/断链证书站点）
+        op = _opener(referer, no_verify=True)
+        with op.open(req, timeout=timeout) as r:
+            raw = r.read()
+            enc = (r.headers.get("Content-Encoding") or "").lower()
+            ctype = (r.headers.get("Content-Type") or "").lower()
+            m = re.search(r"charset=([\w-]+)", ctype)
+            charset = m.group(1) if m else None
     if enc == "gzip":
         try:
             raw = gzip.decompress(raw)
@@ -1453,6 +2683,151 @@ def decode_bytes(raw, charset=None):
 def http_text(url, referer=None, timeout=14):
     raw, cs = fetch_bytes(url, referer, timeout)
     return decode_bytes(raw, cs)
+
+
+# ------------------------------------------------------------ 证书修复（V7.8.1）
+# 抓取层已用「免校验重试」兜底，这里额外给用户一个可视化面板：
+# 记录哪些站点证书链有问题、各自需要哪一级证书、下载/安装状态如何。
+
+CERT_ISSUES = {}
+CERT_PATH = os.path.join(data_dir(), "cert_fix.json")
+CERT_DIR = os.path.join(data_dir(), "certs")
+
+
+def _cert_load():
+    global CERT_ISSUES
+    try:
+        with open(CERT_PATH, "r", encoding="utf-8") as f:
+            CERT_ISSUES = json.load(f) or {}
+    except Exception:
+        CERT_ISSUES = {}
+
+
+def _cert_save():
+    try:
+        with open(CERT_PATH, "w", encoding="utf-8") as f:
+            json.dump(CERT_ISSUES, f, ensure_ascii=False, indent=1)
+    except Exception as e:
+        log("写 cert_fix.json 失败: %r" % (e,))
+
+
+def _record_cert_issue(url, err):
+    try:
+        host = (urllib.parse.urlparse(url).netloc or "").split(":")[0].lower()
+        if not host:
+            return
+        e = CERT_ISSUES.get(host) or {}
+        e["err"] = str(err)[:200]
+        e["ts"] = time.time()
+        CERT_ISSUES[host] = e
+        _cert_save()
+    except Exception:
+        pass
+
+
+def _ps_b64(script):
+    import base64 as _b
+    return _b.b64encode(script.encode("utf-16-le")).decode("ascii")
+
+
+def cert_chain_probe(host):
+    """用 Windows 自身加密栈探测站点证书链（PowerShell SslStream + X509Chain），
+    返回 {ok, chain:[{subject,issuer,notAfter,thumb,der,selfSigned}]} 或 {ok:False,err}。
+    不做任何系统修改，只读。"""
+    ps = r'''
+$hn = '%HOST%'
+try {
+  $tcp = New-Object Net.Sockets.TcpClient($hn, 443)
+  $ss = New-Object Net.Security.SslStream($tcp.GetStream(), $false, ({ $true }))
+  $ss.AuthenticateAsClient($hn)
+  $leaf = New-Object Security.Cryptography.X509Certificates.X509Certificate2($ss.RemoteCertificate)
+  $ch = New-Object Security.Cryptography.X509Certificates.X509Chain
+  $ch.ChainPolicy.VerificationFlags = [Security.Cryptography.X509Certificates.X509VerificationFlags]::AllowUnknownCertificateAuthority
+  $ch.ChainPolicy.RevocationMode = [Security.Cryptography.X509Certificates.X509RevocationMode]::NoCheck
+  [void]$ch.Build($leaf)
+  $list = @()
+  foreach ($el in $ch.ChainElements) {
+    $c = $el.Certificate
+    $list += @{ subject=$c.Subject; issuer=$c.Issuer; notAfter=$c.NotAfter.ToString('yyyy-MM-dd'); thumb=$c.Thumbprint; der=[Convert]::ToBase64String($c.RawData); selfSigned=($c.Subject -eq $c.Issuer) }
+  }
+  $ss.Dispose(); $tcp.Dispose()
+  Write-Output (@{ ok=$true; chain=@($list) } | ConvertTo-Json -Depth 4 -Compress)
+} catch {
+  Write-Output (@{ ok=$false; err=$_.Exception.Message } | ConvertTo-Json -Depth 3 -Compress)
+}
+'''.replace("%HOST%", host)
+    try:
+        import subprocess
+        r = subprocess.run(["powershell", "-NoProfile", "-NonInteractive",
+                            "-EncodedCommand", _ps_b64(ps)],
+                           capture_output=True, timeout=30)
+        out = r.stdout.decode("utf-8", errors="ignore").strip()
+        if not out:
+            return {"ok": False, "err": (r.stderr.decode("utf-8", errors="ignore")[:120] or "无输出")}
+        d = json.loads(out)
+        if d.get("ok") and isinstance(d.get("chain"), dict):   # 单元素链 ConvertTo-Json 会变对象
+            d["chain"] = [d["chain"]]
+        return d
+    except Exception as e:
+        return {"ok": False, "err": str(e)[:160]}
+
+
+def cert_chain_install(host):
+    """把探测到的证书链逐级导出为 .cer（记录下载状态），再用 certutil 装入当前用户的
+    中级证书颁发机构（CA）存储，让浏览器等其它软件也能正常访问这些站点。"""
+    import subprocess
+    e = CERT_ISSUES.get(host)
+    if not e or not e.get("chain"):
+        return False, "请先点「检测证书链」"
+    os.makedirs(CERT_DIR, exist_ok=True)
+    installed, saved = 0, 0
+    for i, c in enumerate(e["chain"]):
+        if c.get("selfSigned"):
+            c["saved"] = c.get("saved", False)
+            continue   # 根证书由系统自带，不覆盖安装
+        try:
+            import base64 as _b
+            der = _b.b64decode(c["der"])
+            path = os.path.join(CERT_DIR, "%s_%d.cer" % (re.sub(r"[^\w.-]", "_", host), i))
+            with open(path, "wb") as f:
+                f.write(der)
+            c["saved"] = True
+            c["file"] = path
+            saved += 1
+        except Exception:
+            c["saved"] = c.get("saved", False)
+    for i, c in enumerate(e["chain"]):
+        if c.get("selfSigned") or not c.get("file"):
+            continue
+        try:
+            r = subprocess.run(["certutil", "-addstore", "-user", "CA", c["file"]],
+                               capture_output=True, timeout=30)
+            if r.returncode == 0:
+                c["installed"] = True
+                installed += 1
+        except Exception:
+            pass
+    e["downloaded"] = saved > 0
+    e["installedTs"] = time.time() if installed else e.get("installedTs", 0)
+    _cert_save()
+    need = sum(1 for c in e["chain"] if not c.get("selfSigned"))
+    return True, "已下载 %d/%d 级证书，安装成功 %d 级（装入当前用户「中级证书颁发机构」）" % (
+        saved, need, installed)
+
+
+def cert_issues_payload():
+    items = []
+    for host, e in CERT_ISSUES.items():
+        chain = [{k: c.get(k) for k in ("subject", "issuer", "notAfter", "selfSigned", "saved", "installed")}
+                 for c in (e.get("chain") or [])]
+        items.append({"host": host, "err": e.get("err", ""), "ts": e.get("ts", 0),
+                      "downloaded": e.get("downloaded", False), "installedTs": e.get("installedTs", 0),
+                      "chain": chain})
+    items.sort(key=lambda x: -x["ts"])
+    return items
+
+
+_cert_load()   # 启动时恢复已记录的证书问题站点
 
 
 def http_json(url, referer=None, timeout=14, data=None):
@@ -1719,11 +3094,98 @@ def p_github(url):
         p = art.first("p")
         desc = p.text(120) if p else ""
         extra = " · ".join(x for x in [lang, desc] if x)
-        out.append(mk_item(repo, "https://github.com/" + a.get("href").strip("/"),
-                           to_heat(m.group(1)) if m else None,
-                           "https://github.com/%s.png?size=96" % owner, extra,
-                           "https://github.com/"))
+        it = mk_item(repo, "https://github.com/" + a.get("href").strip("/"),
+                     to_heat(m.group(1)) if m else None,
+                     "https://github.com/%s.png?size=96" % owner, extra,
+                     "https://github.com/")
+        if it and desc:
+            it["desc"] = desc[:150]   # 英文简介单独带出，供界面悬停显示中文翻译
+        out.append(it)
     return finish(out)
+
+
+def p_crossref(url):
+    """Crossref 期刊最新论文：/journals/<ISSN>/works?rows=N&sort=published&order=desc
+
+    NEJM / Lancet / JAMA / Nature 系 / Elsevier 系这些期刊站几乎都挡爬虫（Cloudflare 403），
+    但 Crossref 是公开的元数据 API，能稳定拿到「该刊最新发表的论文标题 + DOI」。
+    坑：Crossref 的 title 是**数组**，直接 str() 会带上方括号（云端实测出现过
+    "['TAVR in Patients ...']" 这种标题），这里必须取首元素。"""
+    data = http_json(url, timeout=20)
+    items = ((data or {}).get("message") or {}).get("items") or []
+    out = []
+    for it in items:
+        t = it.get("title")
+        title = (t[0] if t else "") if isinstance(t, list) else (t or "")
+        title = re.sub(r"\s+", " ", str(title)).strip()
+        doi = str(it.get("DOI") or "").strip()
+        if not title or not doi:
+            continue
+        # 过滤非论文条目：卷首、勘误、编委会名单等
+        if re.match(r"(?i)^(back ?matter|front ?matter|issue information|correction|erratum)", title):
+            continue
+        day = ""
+        for k in ("published", "published-online", "issued"):
+            parts = (it.get(k) or {}).get("date-parts")
+            if parts and parts[0] and parts[0][0]:
+                seq = parts[0]
+                day = "-".join("%04d" % seq[0] if i == 0 else "%02d" % int(x)
+                               for i, x in enumerate(seq) if x)
+                break
+        out.append(mk_item(title, "https://doi.org/" + doi, None, "", day))
+    if not out:
+        raise RuntimeError("Crossref 未返回论文条目")
+    return finish(out, sort_by_heat=False)
+
+
+def p_pubmed(url):
+    """PubMed E-utilities：esearch 拿 PMID 列表，esummary 拿标题。
+
+    PubMed 本身没有可解析的列表页（前端是 JS），必须走两步 JSON 接口。
+    url 里带 esearch 的查询串（term / retmax / sort），解析器自己补第二步。"""
+    data = http_json(url, timeout=20)
+    ids = ((data or {}).get("esearchresult") or {}).get("idlist") or []
+    ids = [str(i) for i in ids if i][:20]
+    if not ids:
+        raise RuntimeError("PubMed 未返回 PMID")
+    s = http_json("https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi"
+                  "?db=pubmed&retmode=json&id=" + ",".join(ids), timeout=20)
+    res = (s or {}).get("result") or {}
+    out = []
+    for pid in ids:
+        it = res.get(pid) or {}
+        title = re.sub(r"\s+", " ", str(it.get("title") or "")).strip().rstrip(".")
+        if not title:
+            continue
+        src = str(it.get("fulljournalname") or it.get("source") or "")
+        day = str(it.get("pubdate") or "")
+        out.append(mk_item(title, "https://pubmed.ncbi.nlm.nih.gov/%s/" % pid,
+                           None, "", " · ".join(x for x in [src, day] if x)))
+    if not out:
+        raise RuntimeError("PubMed 未解析到条目")
+    return finish(out, sort_by_heat=False)
+
+
+def p_gitea(url):
+    """Gitea/Forgejo 公开 API：/api/v1/repos/search?sort=stars|updated&order=desc
+
+    用途：Codeberg 这类实例的页面上没有服务端渲染的热门榜，只有 API 支持
+    「按标星 / 最近更新」排序 —— 正好满足「按星标或上升量排行」这个要求。"""
+    data = http_json(url, timeout=20)
+    rows = (data or {}).get("data") or []
+    out = []
+    for r in rows:
+        name = str(r.get("full_name") or "").strip()
+        if not name:
+            continue
+        stars = r.get("stars_count") or 0
+        desc = str(r.get("description") or "").strip()
+        out.append(mk_item(name, str(r.get("html_url") or ("https://codeberg.org/" + name)),
+                           int(stars) if stars else None, "", desc[:70]))
+    if not out:
+        raise RuntimeError("Gitea API 未返回仓库")
+    return finish(out, sort_by_heat=False)
+
 
 
 def p_tophub(url):
@@ -2035,8 +3497,8 @@ def _json_lists(obj, path="", depth=0, acc=None):
     return acc
 
 
-def generic_json(url, base):
-    data = http_json(url)
+def _json_extract(data, base):
+    """从任意 JSON（含裸数组/嵌套）里挑最像榜单的数组并转成条目。"""
     best, best_score = None, -1
     for path, arr in _json_lists(data):
         sample, score = arr[0], 0
@@ -2058,6 +3520,156 @@ def generic_json(url, base):
             continue
         out.append(mk_item(str(title), pick(it, URL_KEYS) or "", to_heat(pick(it, HEAT_KEYS)),
                            pick(it, IMG_KEYS) or "", "", base))
+    return finish(out)
+
+
+def generic_json(url, base):
+    data = http_json(url)
+    return _json_extract(data, base)
+
+
+def p_jsonp(url):
+    """JSONP 接口：callback(...) 包裹的 JSON，如央视新闻 news(...)。"""
+    txt = http_text(url)
+    i, j = txt.find("("), txt.rindex(")")
+    if i < 0 or j <= i:
+        raise RuntimeError("不是 JSONP 格式")
+    data = json.loads(txt[i + 1:j])
+    return _json_extract(data, "%s://%s" % (urllib.parse.urlparse(url).scheme,
+                                            urllib.parse.urlparse(url).netloc))
+
+
+def p_autohome(url):
+    """汽车之家销量榜：data-rank-num 区块内 img alt=车系名、span 为月销量。"""
+    html = http_text(url)
+    base = "https://www.autohome.com.cn"
+    out = []
+    for m in re.finditer(r'data-rank-num="(\d+)"(.*?)(?=data-rank-num="|\Z)', html, re.S):
+        rank, blk = m.group(1), m.group(2)
+        nm = re.search(r'alt="([^"]{2,30})"', blk)
+        if not nm:
+            continue
+        sal = re.search(r'tw-font-medium">(\d{2,})</span>', blk)
+        out.append(mk_item(nm.group(1), "", to_heat(sal.group(1)) if sal else None, "", "", base))
+        out[-1]["rank"] = int(rank) if str(rank).isdigit() else len(out)
+    if len(out) < 3:
+        raise RuntimeError("页面里没找到榜单结构")
+    return finish(out)
+
+
+# 奥斯卡最佳影片历届得主（第1届 1927/28 至第98届 2025），内置静态数据，三端离线可用。
+# 格式：届数|颁奖年份|中文译名|英文原名
+_OSCAR_WINNERS = """1|1927/28|翼|Wings
+2|1928/29|百老汇的旋律|The Broadway Melody
+3|1929/30|西线无战事|All Quiet on the Western Front
+4|1930/31|壮志千秋|Cimarron
+5|1931/32|大饭店|Grand Hotel
+6|1932/33|乱世春秋|Cavalcade
+7|1934|一夜风流|It Happened One Night
+8|1935|叛舰喋血记|Mutiny on the Bounty
+9|1936|歌舞大王齐格飞|The Great Ziegfeld
+10|1937|左拉传|The Life of Emile Zola
+11|1938|浮生若梦|You Can't Take It with You
+12|1939|乱世佳人|Gone with the Wind
+13|1940|蝴蝶梦|Rebecca
+14|1941|青山翠谷|How Green Was My Valley
+15|1942|忠勇之家|Mrs. Miniver
+16|1943|卡萨布兰卡|Casablanca
+17|1944|与我同行|Going My Way
+18|1945|失去的周末|The Lost Weekend
+19|1946|黄金时代|The Best Years of Our Lives
+20|1947|君子协定|Gentleman's Agreement
+21|1948|王子复仇记|Hamlet
+22|1949|当代奸雄|All the King's Men
+23|1950|彗星美人|All About Eve
+24|1951|花都舞影|An American in Paris
+25|1952|戏王之王|The Greatest Show on Earth
+26|1953|乱世忠魂|From Here to Eternity
+27|1954|码头风云|On the Waterfront
+28|1955|马蒂|Marty
+29|1956|八十天环游地球|Around the World in 80 Days
+30|1957|桂河大桥|The Bridge on the River Kwai
+31|1958|金粉世界|Gigi
+32|1959|宾虚|Ben-Hur
+33|1960|桃色公寓|The Apartment
+34|1961|西区故事|West Side Story
+35|1962|阿拉伯的劳伦斯|Lawrence of Arabia
+36|1963|汤姆·琼斯|Tom Jones
+37|1964|窈窕淑女|My Fair Lady
+38|1965|音乐之声|The Sound of Music
+39|1966|四季之人|A Man for All Seasons
+40|1967|炎热的夜晚|In the Heat of the Night
+41|1968|雾都孤儿|Oliver!
+42|1969|午夜牛郎|Midnight Cowboy
+43|1970|巴顿将军|Patton
+44|1971|法国贩毒网|The French Connection
+45|1972|教父|The Godfather
+46|1973|骗中骗|The Sting
+47|1974|教父2|The Godfather Part II
+48|1975|飞越疯人院|One Flew Over the Cuckoo's Nest
+49|1976|洛奇|Rocky
+50|1977|安妮·霍尔|Annie Hall
+51|1978|猎鹿人|The Deer Hunter
+52|1979|克莱默夫妇|Kramer vs. Kramer
+53|1980|普通人|Ordinary People
+54|1981|烈火战车|Chariots of Fire
+55|1982|甘地传|Gandhi
+56|1983|母女情深|Terms of Endearment
+57|1984|莫扎特传|Amadeus
+58|1985|走出非洲|Out of Africa
+59|1986|野战排|Platoon
+60|1987|末代皇帝|The Last Emperor
+61|1988|雨人|Rain Man
+62|1989|为黛西小姐开车|Driving Miss Daisy
+63|1990|与狼共舞|Dances with Wolves
+64|1991|沉默的羔羊|The Silence of the Lambs
+65|1992|杀无赦|Unforgiven
+66|1993|辛德勒的名单|Schindler's List
+67|1994|阿甘正传|Forrest Gump
+68|1995|勇敢的心|Braveheart
+69|1996|英国病人|The English Patient
+70|1997|泰坦尼克号|Titanic
+71|1998|莎翁情史|Shakespeare in Love
+72|1999|美国丽人|American Beauty
+73|2000|角斗士|Gladiator
+74|2001|美丽心灵|A Beautiful Mind
+75|2002|芝加哥|Chicago
+76|2003|指环王3：王者归来|The Lord of the Rings: The Return of the King
+77|2004|百万美元宝贝|Million Dollar Baby
+78|2005|撞车|Crash
+79|2006|无间行者|The Departed
+80|2007|老无所依|No Country for Old Men
+81|2008|贫民窟的百万富翁|Slumdog Millionaire
+82|2009|拆弹部队|The Hurt Locker
+83|2010|国王的演讲|The King's Speech
+84|2011|艺术家|The Artist
+85|2012|逃离德黑兰|Argo
+86|2013|为奴十二年|12 Years a Slave
+87|2014|鸟人|Birdman
+88|2015|聚焦|Spotlight
+89|2016|月光男孩|Moonlight
+90|2017|水形物语|The Shape of Water
+91|2018|绿皮书|Green Book
+92|2019|寄生虫|Parasite
+93|2020|无依之地|Nomadland
+94|2021|健听女孩|CODA
+95|2022|瞬息全宇宙|Everything Everywhere All at Once
+96|2023|奥本海默|Oppenheimer
+97|2024|阿诺拉|Anora
+98|2025|一战再战|One Battle After Another"""
+
+
+def p_oscar(url=None):
+    """奥斯卡·历届最佳影片（内置静态数据）。"""
+    base = "https://movie.douban.com"
+    out = []
+    for line in _OSCAR_WINNERS.splitlines():
+        parts = (line.split("|") + ["", "", ""])[:4]
+        n, yr, cn, en = parts
+        q = urllib.parse.quote(cn or en)
+        out.append(mk_item("第%s届(%s)《%s》" % (n, yr, cn),
+                           "https://www.douban.com/search?q=" + q, None, "", en, base))
+        out[-1]["rank"] = int(n) if n.isdigit() else len(out)
     return finish(out)
 
 
@@ -2220,6 +3832,51 @@ def p_sse(url):
     return finish(out)
 
 
+def p_weread(url):
+    """微信读书·读书榜：https://weread.qq.com/#rank 服务端渲染页面，
+    从「大家都在读 / 近期热读」卡片里提取 书名/作者/链接（无需登录）。"""
+    html = http_text(url or "https://weread.qq.com/#rank", timeout=18)
+    if len(html) < 3000:
+        raise RuntimeError("微信读书页面加载不完整（%d 字节）" % len(html))
+    out = []
+    seen = set()
+    # ① 榜单行：<a class="wr_index_page_mini_bookInfo" href="…"> → 序号 / 书名 / 作者 / 推荐值
+    pat_rank = re.compile(
+        r'href="(https://weread\.qq\.com/web/reader/[0-9a-f]+)"[\s\S]{0,1500}?'
+        r'wr_index_page_mini_bookInfo_content_idx">(\d{1,2})</div>'
+        r'[\s\S]{0,600}?wr_index_page_mini_bookInfo_content_title_name">([^<]{2,60})</span>')
+    for m in pat_rank.finditer(html):
+        link, idx, title = m.group(1), m.group(2), clean_text(m.group(3))
+        if not title or title in seen:
+            continue
+        seen.add(title)
+        win = html[m.start():m.start() + 2600]
+        am = re.search(r'wr_index_page_mini_bookInfo_content_author"[^>]*>([\s\S]{0,80}?)</div>', win)
+        author = clean_text(re.sub(r"<!--[\s\S]*?-->", "", am.group(1))) if am else ""
+        rm = re.search(r"推荐值\s*([\d.]+)%", win)
+        it = mk_item(title, link, int(float(rm.group(1)) * 100) if rm else None, "",
+                     (author + (" · 推荐值 " + rm.group(1) + "%" if rm else "")).strip(" ·"),
+                     "https://weread.qq.com")
+        if idx.isdigit():
+            it["rank"] = int(idx)
+        out.append(it)
+    # ② 推荐卡片：<a class="wr_suggestion_card_wrapper" href="…"> → 书名 / 作者
+    pat = re.compile(
+        r'href="(https://weread\.qq\.com/web/reader/[0-9a-f]+)"[\s\S]{0,900}?'
+        r'wr_suggestion_card_content_title"[^>]*>([^<]{2,60})</div>'
+        r'[\s\S]{0,400}?wr_suggestion_card_content_author"[^>]*>([^<]{0,40})<')
+    for m in pat.finditer(html):
+        link, title, author = m.group(1).strip(), clean_text(m.group(2)), clean_text(m.group(3))
+        if not title or title in seen:
+            continue
+        seen.add(title)
+        out.append(mk_item(title, link, None, "", author, "https://weread.qq.com"))
+    if not out:
+        # 兜底：抓不到卡片时退回通用解析
+        return parse_by_sel(parse_html(html), url or "https://weread.qq.com/#rank", {})
+    return finish(out)
+
+
 def p_modelscope(url):
     """ModelScope 魔搭社区：热门模型榜（PUT 接口）"""
     body = json.dumps({"PageSize": 30, "PageNumber": 1, "SortBy": "Default"}).encode("utf-8")
@@ -2251,53 +3908,673 @@ def p_modelscope(url):
     return finish(out)
 
 
+# ---------------------------------------------------------------- 学术期刊官网（V7.9.3）
+# 这一批不是"热榜"站：要的是「当期目录 / 最新论文 / 通知公告」里的文章题目，
+# 按网站自己的发布时间排序（不加热度、不按点击量），所以统一 finish(sort_by_heat=False)。
+
+def _strip_tags(s):
+    return clean_text(_html.unescape(re.sub(r"<[^>]+>", " ", s or "")))
+
+
+def _get_html(url, extra=None, timeout=18):
+    """少数站点按 Accept 头返回不同版本（不带 Accept 会拿到被转义的空壳），这里可自定义头"""
+    hdrs = {"User-Agent": UA, "Accept": "text/html,application/xhtml+xml,*/*;q=0.8"}
+    if extra:
+        hdrs.update(extra)
+    req = urllib.request.Request(url, headers=hdrs)
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        raw = r.read()
+        enc = (r.headers.get("Content-Encoding") or "").lower()
+    if "gzip" in enc:
+        raw = gzip.decompress(raw)
+    return decode_bytes(raw)
+
+
+def _cn_cut(s):
+    """「中文标题English Title」→ 只留中文标题（中文后紧跟英文字母处截断）"""
+    s = _strip_tags(s).replace("*", " ").strip()
+    m = re.search(r"[\u4e00-\u9fff][，。、；：？！）】”’]?\s*[A-Za-z]", s)
+    if m and m.start() >= 4:
+        return s[:m.start() + 1].strip()
+    return s
+
+
+def p_iwep(url):
+    """世界经济与政治研究所（社科经济）：最新文章，日期在链接里 t20221226"""
+    html = http_text(url, timeout=18)
+    rows = re.findall(r'href="(\./qkjj/[^"]*?t(\d{8})[^"]*)"[^>]*>(.*?)</a>', html, re.S)
+    got, seen = [], set()
+    for href, d, raw in rows:
+        t = _strip_tags(raw)
+        if len(t) < 8 or t.startswith(("摘要", "【内容提要", "关键词", "作者")):
+            continue
+        if ("目录" in t) or ("征稿" in t) or ("启事" in t) or t.startswith("《"):
+            continue
+        if t in seen:
+            continue
+        seen.add(t)
+        date = "%s-%s-%s" % (d[:4], d[4:6], d[6:])
+        it = mk_item(t, abs_url(url, href), None, "", date, base=url)
+        if it:
+            got.append((date, it))
+    if not got:
+        raise RuntimeError("世界经济与政治研究所 未解析到文章")
+    got.sort(key=lambda x: x[0], reverse=True)
+    return finish([x[1] for x in got], sort_by_heat=False)
+
+
+def p_ajcass(url):
+    """ajcass 平台（经济研究）：官方 JSON 接口返回当期目录"""
+    data = http_json(url, referer="https://erj.ajcass.com/", timeout=18)
+    lst = ((data or {}).get("data") or {}).get("issueInfoList") or []
+    out = []
+    for a in lst:
+        t = clean_text(a.get("title") or "")
+        if len(t) < 6:
+            continue
+        yvi = clean_text(a.get("yearVolumeIssue") or "")
+        authors = clean_text(a.get("authors") or "")
+        extra = " · ".join([x for x in (yvi, authors) if x])[:70]
+        out.append(mk_item(t, "https://erj.ajcass.com/", None, "", extra))
+    if not out:
+        raise RuntimeError("经济研究 当期目录为空")
+    return finish(out, sort_by_heat=False)
+
+
+def p_jryj(url):
+    """金融研究：当期目录（附出版日期），文章标题 + 作者"""
+    html = http_text(url, timeout=18)
+    m = re.search(r"(\d{4})年\s*,\s*第\s*(\d+)\s*期.*?出版日期[：:]\s*(\d{4}-\d{2}-\d{2})", html, re.S)
+    issue = ("%s年第%s期" % (m.group(1), m.group(2))) if m else ""
+    pubdate = m.group(3) if m else ""
+    extra = " · ".join([x for x in (issue, pubdate) if x])
+    rows = re.findall(
+        r'href="(?:(?:https?:)?//www\.jryj\.org\.cn)?(/CN/abstract/abstract\d+\.shtml)"[^>]*>(.*?)</a>',
+        html, re.S)
+    out, seen = [], set()
+    for href, raw in rows:
+        t = _strip_tags(raw)
+        if len(t) < 6 or t in seen or t.startswith(("摘要", "正文", "参考文献")):
+            continue
+        seen.add(t)
+        out.append(mk_item(t, abs_url(url, href), None, "", extra, base=url))
+    if not out:
+        raise RuntimeError("金融研究 当期目录未解析到文章")
+    return finish(out, sort_by_heat=False)
+
+
+def p_cie(url):
+    """中国工业经济：当期目录（/Magazine/Show?id=xxx 为单篇文章）"""
+    html = http_text(url, timeout=18)
+    extra = "当期目录"
+    rows = re.findall(r'href="(/Magazine/Show\?id=\d+)"[^>]*>(.*?)</a>', html, re.S)
+    out, seen = [], set()
+    for href, raw in rows:
+        t = _strip_tags(raw)
+        if len(t) < 6 or t.startswith(("【", "下载全文", "摘要")) or t in seen:
+            continue
+        seen.add(t)
+        out.append(mk_item(t, abs_url(url, href), None, "", extra, base=url))
+    if not out:
+        raise RuntimeError("中国工业经济 当期目录未解析到文章")
+    return finish(out, sort_by_heat=False)
+
+
+def p_cfrn(url):
+    """金融学术（CFRN）：最新论文列表（/lw/17021.html）"""
+    html = _get_html(url)
+    rows = re.findall(r"""href=['"](/lw/\d{4,6}\.html?)['"][^>]*>(.*?)</a>""", html, re.S)
+    out, seen = [], set()
+    for href, raw in rows:
+        t = _strip_tags(raw)
+        t = re.sub(r"\s{2,}", " ", t).strip()
+        if len(t) < 8 or t in seen:
+            continue
+        seen.add(t)
+        out.append(mk_item(t, abs_url(url, href), None, "", "最新论文", base=url))
+    if not out:
+        raise RuntimeError("金融学术 最新论文未解析到文章")
+    return finish(out, sort_by_heat=False)
+
+
+def p_nopss(url):
+    """全国哲学社会科学工作办公室：通知公告（标题 + [发布时间]）"""
+    html = http_text(url, timeout=18)
+    rows = re.findall(
+        r"<li>\s*<a[^>]+href=['\"]([^'\"]+)['\"][^>]*>(.*?)</a>\s*<em>\[([^\]]+)\]</em>",
+        html, re.S)
+    out, seen = [], set()
+    junk = ("网站首页", "本办概况", "政策制度", "基金管理", "基金专刊", "成果集萃",
+            "资助期刊", "高端智库", "社团工作", "资料下载", "京ICP", "更多")
+    for href, raw, dt in rows:
+        t = _strip_tags(raw)
+        if len(t) < 6 or t in seen or any(j in t for j in junk):
+            continue
+        seen.add(t)
+        out.append((clean_text(dt), mk_item(t, abs_url(url, href), None, "", clean_text(dt), base=url)))
+    if not out:
+        raise RuntimeError("哲学社会科学 通知公告未解析到内容")
+    out.sort(key=lambda x: x[0], reverse=True)
+    return finish([x[1] for x in out], sort_by_heat=False)
+
+
+def p_gjjryj(url):
+    """国际金融研究：当期目录（URL 里带年/卷/期）"""
+    html = http_text(url, timeout=18)
+    rows = re.findall(
+        r'href="(http://www\.gjjryj\.org\.cn/CN/Y(\d{4})/V\d+/I(\d+)/\d+)"[^>]*>(.*?)</a>',
+        html, re.S)
+    out, seen = [], set()
+    for href, yr, iss, raw in rows:
+        t = _cn_cut(raw)
+        if len(t) < 6 or t in seen:
+            continue
+        seen.add(t)
+        extra = "%s年第%s期" % (yr, iss)
+        out.append(mk_item(t, href, None, "", extra, base=url))
+    if not out:
+        raise RuntimeError("国际金融研究 当期目录未解析到文章")
+    return finish(out, sort_by_heat=False)
+
+
+# ---------------------------------------------------------------- 前端渲染站点：直接调站点自己的接口
+# V7.9.6：SciEngine / 国家自然科学基金成果库 这类站，浏览器里能看到内容，但 HTML 里是空的
+# （页面由 JS 渲染）。它们的内部接口其实是公开的，直接调接口就能拿到和浏览器一样的题目。
+
+_DES_KEY = b"IFROMC86"          # kd.nsfc.cn 前端硬编码的 DES 密钥（ECB / PKCS5）
+
+
+def _des_json(b64txt):
+    """kd.nsfc.cn 的检索结果是 base64(DES-ECB) 密文，用它自己的密钥解开"""
+    try:
+        import _des                                  # 随程序分发的纯 Python DES（无需装库）
+    except Exception:
+        import pyDes as _des                          # 兜底：环境里装了 pyDes 也行
+    d = _des.des(_DES_KEY, _des.ECB, padmode=_des.PAD_PKCS5)
+    txt = d.decrypt(base64.b64decode(b64txt)).decode("utf-8", "replace")
+    return json.loads(txt)
+
+
+def _post_multipart(api, fields, referer, timeout=30):
+    """按站点前端的方式发 multipart/form-data（SciEngine 检索只认这种）"""
+    bd = "----WebKitFormBoundary" + os.urandom(8).hex()
+    lines = []
+    for k, v in fields.items():
+        lines.append("--" + bd)
+        lines.append('Content-Disposition: form-data; name="%s"' % k)
+        lines.append("")
+        lines.append(str(v))
+    lines.append("--" + bd + "--")
+    lines.append("")
+    body = "\r\n".join(lines).encode("utf-8")
+    origin = "/".join(referer.split("/")[:3])
+    req = urllib.request.Request(api, data=body, headers={
+        "User-Agent": UA, "Accept": "application/json, text/plain, */*",
+        "Content-Type": "multipart/form-data; boundary=" + bd,
+        "Origin": origin, "Referer": referer})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return decode_bytes(r.read())
+
+
+_BROWSER_CACHE = {"path": None, "tried": False}
+
+
+def _find_browser():
+    """找一个能用的 Chromium 内核浏览器（Chrome / Edge / Chromium），用于渲染纯前端站点"""
+    if _BROWSER_CACHE["tried"]:
+        return _BROWSER_CACHE["path"]
+    _BROWSER_CACHE["tried"] = True
+    cands = [os.environ.get("REBANG_CHROME") or ""]
+    if os.name == "nt":
+        for base in (os.environ.get("PROGRAMFILES"), os.environ.get("PROGRAMFILES(X86)"),
+                     os.environ.get("LOCALAPPDATA")):
+            if not base:
+                continue
+            cands += [os.path.join(base, "Google", "Chrome", "Application", "chrome.exe"),
+                      os.path.join(base, "Microsoft", "Edge", "Application", "msedge.exe")]
+    else:
+        cands += ["/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/google-chrome",
+                  "/usr/bin/google-chrome-stable", "/snap/bin/chromium"]
+    for p in cands:
+        try:
+            if p and os.path.isfile(p):
+                _BROWSER_CACHE["path"] = p
+                break
+        except Exception:
+            pass
+    return _BROWSER_CACHE["path"]
+
+
+def _render_dom(url, wait_ms=15000, timeout=45):
+    """用无头浏览器把页面跑一遍，再把渲染后的 HTML 拿回来（对付 JS 渲染 + JS 人机校验的站）"""
+    exe = _find_browser()
+    if not exe:
+        raise RuntimeError("这个站必须用浏览器内核渲染，但本机没找到 Chrome / Edge")
+    import tempfile, shutil
+    prof = tempfile.mkdtemp(prefix="rbdom_")
+    cmd = [exe, "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
+           "--disable-extensions", "--mute-audio", "--no-sandbox",
+           "--user-data-dir=" + prof,
+           "--user-agent=" + UA,
+           "--disable-blink-features=AutomationControlled",
+           "--lang=zh-CN", "--virtual-time-budget=%d" % wait_ms,
+           "--dump-dom", url]
+    try:
+        r = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                           timeout=timeout)
+        out = decode_bytes(r.stdout or b"")
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("浏览器渲染超时（%s）" % url)
+    finally:
+        try:
+            shutil.rmtree(prof, ignore_errors=True)
+        except Exception:
+            pass
+    if len(out) < 500:
+        raise RuntimeError("浏览器没取到页面内容")
+    return out
+
+
+def p_las(url):
+    """中科院文献情报中心「智库报告」：站点有 JS 人机校验，普通请求返回 468，只能渲染后取 DOM"""
+    html = _render_dom(url, 15000)
+    rows = re.findall(
+        r'<em class="title-time">([\d-]{8,10})</em>\s*<a[^>]+href="([^"]+)"[^>]*>(.*?)</a>', html, re.S)
+    out, seen = [], set()
+    for date, href, raw in rows:
+        t = _strip_tags(raw)
+        t = re.sub(r"\s{2,}", " ", t).strip()
+        if len(t) < 6 or t in seen:
+            continue
+        seen.add(t)
+        out.append((date, mk_item(t, _html.unescape(href), None, "", date[:7], base=url)))
+    if not out:
+        raise RuntimeError("智库报告页没解析到条目（站点可能改了结构）")
+    out.sort(key=lambda x: x[0], reverse=True)
+    return finish([x[1] for x in out], sort_by_heat=False)
+
+
+def p_nstl(url):
+    """NSTL 产业统计数据库：React 前端，首页「资源推荐」是馆藏报告卡片"""
+    html = _render_dom(url, 12000)
+    arts = re.findall(r'<article>(.*?)</article>', html, re.S)
+    out, seen = [], set()
+    for a in arts:
+        m1 = re.search(r'<h3[^>]*>(.*?)</h3>', a, re.S)
+        if not m1:
+            continue
+        t = _strip_tags(m1.group(1))
+        if len(t) < 4 or t in seen:
+            continue
+        seen.add(t)
+        m2 = re.search(r'class="resource-search"[^>]*href="([^"]+)"', a) or \
+            re.search(r'href="([^"]+)"[^>]*class="resource-search"', a)
+        link = _html.unescape(m2.group(1)) if m2 else url
+        m3 = re.search(r"出版来源：\s*([^<]+)", a)
+        m4 = re.search(r"出版年份：\s*([^<]+)", a)
+        if not (m3 or m4):
+            continue                      # 介绍性 section 也会用 <article>，这里只留真正的资源卡片
+        extra = " · ".join([x for x in ((m3.group(1).strip() if m3 else ""),
+                                        (m4.group(1).strip() if m4 else "")) if x])
+        out.append(mk_item(t, link, None, "", extra))
+    if not out:
+        raise RuntimeError("NSTL 首页没解析到资源条目")
+    return finish(out, sort_by_heat=False)
+
+
+SCI_API = "https://www.sciengine.com/sci-open/api/v1/open/SciSearch/searchNew"
+
+
+def p_sci(url):
+    """SciEngine 检索：POST /sci-open/api/v1/open/SciSearch/searchNew（返回 JSON，按出版日期倒序）"""
+    m = re.search(r"[?&]queryField_a=([^&#]+)", url)
+    kw = urllib.parse.unquote(m.group(1)) if m else "经济"
+    kw = (kw or "经济").strip() or "经济"
+    ref = "https://www.sciengine.com/plat/search?queryField_a=" + urllib.parse.quote(kw)
+    txt = _post_multipart(SCI_API, {"queryField_a": kw, "page": "1", "size": "30"}, ref)
+    try:
+        j = json.loads(txt)
+    except Exception:
+        raise RuntimeError("SciEngine 接口返回格式异常")
+    recs = ((j.get("data") or {}).get("records") or [])
+    if not recs:
+        raise RuntimeError("SciEngine 检索「%s」没有结果" % kw)
+    rows = []
+    for r in recs:
+        title = _cn_cut(r.get("titleZh") or "") or clean_text(r.get("titleEn") or "")
+        doi = (r.get("doi") or "").strip()
+        if len(title) < 4 or not doi:
+            continue
+        date = ""
+        try:
+            date = time.strftime("%Y-%m-%d", time.localtime(int(r.get("pubDate") or 0) / 1000))
+        except Exception:
+            date = ""
+        extra = " · ".join([x for x in ((r.get("journalTitleZh") or "").strip(), date[:7]) if x])
+        rows.append((date, mk_item(title, "https://www.sciengine.com/doi/" + doi, None, "", extra)))
+    if not rows:
+        raise RuntimeError("SciEngine 检索「%s」未解析到文章" % kw)
+    rows.sort(key=lambda x: x[0], reverse=True)          # 按发布时间倒序，不按热度
+    return finish([x[1] for x in rows], sort_by_heat=False)
+
+
+KD_API = "https://kd.nsfc.cn/api/baseQuery/search"
+
+
+def p_kd(url):
+    """国家自然科学基金·成果检索：POST /api/baseQuery/search，响应为 DES 密文，解出来就是题录"""
+    m = re.search(r"[?&]s=([^&#]+)", url)
+    kw = urllib.parse.unquote(m.group(1)) if m else "经济"
+    kw = (kw or "经济").strip() or "经济"
+    body = {"authors": "", "baseSearchSign": "", "bookName": "", "fuzzyKeyword": kw,
+            "grantCode": "", "issuedBy": "", "journalName": "", "length": 30,
+            "orderBy": "paperVisits", "orderType": "desc", "orgCode": "", "patentNo": "",
+            "patentType": "", "prjZhTitle": "", "proceedingName": "", "publishYear": "",
+            "publisher": "", "rewardRank": "", "rewardTypeName": "", "startPoint": 0,
+            "subjectCode1": "", "zhTitle": "", "hasFullText": False, "issuedByScreenin": ""}
+    ref = "https://kd.nsfc.cn/resultSearchList?s=" + urllib.parse.quote(kw)
+    arr = []
+    for start in (0, 10):                      # 接口一页只回 10 条，翻两页凑够 20
+        body["startPoint"] = start
+        try:
+            req = urllib.request.Request(KD_API, data=json.dumps(body).encode("utf-8"), headers={
+                "User-Agent": UA, "Content-Type": "application/json",
+                "Accept": "application/json, text/plain, */*",
+                "Origin": "https://kd.nsfc.cn", "Referer": ref})
+            with urllib.request.urlopen(req, timeout=25) as r:
+                raw = decode_bytes(r.read()).strip()
+            if raw.startswith("{"):
+                j = json.loads(raw)            # 偶尔不加密，兼容一下
+            else:
+                j = _des_json(raw)
+            page = ((j.get("data") or {}).get("all_achievement") or [])
+        except Exception:
+            if start == 0:
+                raise
+            break                              # 第二页拿不到不影响第一页
+        if not page:
+            break
+        arr += page
+        if len(page) < 10:
+            break
+    if not arr:
+        raise RuntimeError("基金成果检索「%s」没有结果" % kw)
+    rows = []
+    for r in arr:
+        title = _cn_cut(r.get("zhTitle") or "") or clean_text(r.get("enTitle") or "")
+        if len(title) < 4:
+            continue
+        rid = (r.get("id") or "").strip()
+        link = ("https://kd.nsfc.cn/resultDetails?id=" + urllib.parse.quote(rid)) if rid else ref
+        extra = " · ".join([x for x in ((r.get("publishYear") or "").strip(),
+                                        (r.get("journalName") or "").strip()) if x])
+        rows.append(((r.get("publishYear") or ""), mk_item(title, link, None, "", extra)))
+    if not rows:
+        raise RuntimeError("基金成果检索「%s」未解析到题录" % kw)
+    rows.sort(key=lambda x: x[0], reverse=True)           # 按发表年份倒序
+    return finish([x[1] for x in rows], sort_by_heat=False)
+
+
+# ---------------- V7.9.14：权威站点专用解析（只取栏目里的新闻题目，别把导航/目录当新闻） ----------------
+def p_pbc(url):
+    """中国人民银行·沟通交流>新闻：表格列表，题目 + span.hui12 日期"""
+    html = http_text(url, referer="https://www.pbc.gov.cn/", timeout=20)
+    out = []
+    for m in re.finditer(r'<a href="(/[^"]+)"[^>]*\btitle="([^"]+)"[^>]*>[^<]*</a>\s*'
+                         r'</font>\s*<span class="hui12">([\d-]{8,10})</span>', html):
+        out.append(mk_item(_rss_unescape(m.group(2)), m.group(1), None, "",
+                           m.group(3), "https://www.pbc.gov.cn/"))
+    if not out:
+        raise RuntimeError("央行新闻栏目未解析到条目")
+    return finish(out, sort_by_heat=False)
+
+
+def p_mof(url):
+    """财政部·新闻报道>政策发布：ul.xwfb_listbox 的 li>a[title]+span 日期"""
+    html = http_text(url, referer="http://www.mof.gov.cn/", timeout=20)
+    out = []
+    for m in re.finditer(r'<li>\s*<a href="([^"]+)"[^>]*\btitle=[\'"]([^\'"]+)[\'"][^>]*>'
+                         r'[^<]*</a>\s*<span>([\d-]{8,10})</span>\s*</li>', html):
+        out.append(mk_item(_rss_unescape(m.group(2)), m.group(1), None, "",
+                           m.group(3), "http://www.mof.gov.cn/"))
+    if not out:
+        raise RuntimeError("财政部政策发布栏目未解析到条目")
+    return finish(out, sort_by_heat=False)
+
+
+def p_caixin_econ(url):
+    """财新·经济频道：h3/h4 里的正文标题（头条 + 要闻列表），带发布时间与配图"""
+    html = http_text(url, referer="https://www.caixin.com/", timeout=20)
+    out, seen = [], set()
+    for m in re.finditer(r'<h[34]><a href="(https://economy\.caixin\.com/[^"]+)"[^>]*>(.*?)</a>', html):
+        link = m.group(1)
+        if link in seen:
+            continue
+        seen.add(link)
+        t = _rss_unescape(re.sub(r"<[^>]+>", "", m.group(2))).strip()
+        win = html[m.end():m.end() + 500]
+        dm = re.search(r"(\d{4}年\d{1,2}月\d{1,2}日\s*\d{1,2}:\d{2})", win)
+        imgs = re.findall(r'src="(https://img\.caixin\.com/[^"]+)"', html[max(0, m.start() - 900):m.start()])
+        out.append(mk_item(t, link, None, imgs[-1] if imgs else "",
+                           dm.group(1) if dm else ""))
+    if not out:
+        raise RuntimeError("财新经济频道未解析到条目")
+    return finish(out, sort_by_heat=False)
+
+
+def p_cctv_econ(url):
+    """央视经济频道：走站点自己的经济资讯 JSONP（页面正文是 JS 加载的）"""
+    txt = http_text(url, referer="https://jingji.cctv.com/", timeout=20)
+    i, j = txt.find("("), txt.rindex(")")
+    if i < 0 or j <= i:
+        raise RuntimeError("不是 JSONP 格式")
+    data = json.loads(txt[i + 1:j])
+    rows = (data.get("data") or {}).get("list") or []
+    out = []
+    for it in rows:
+        out.append(mk_item(it.get("title"), it.get("url"), None, it.get("image") or "",
+                           (it.get("focus_date") or "")[:16]))
+    if not out:
+        raise RuntimeError("央视经济资讯接口未返回条目")
+    return finish(out, sort_by_heat=False)
+
+
+def p_fangchan(url):
+    """中房网·新闻：只取 /news/<栏目>/<日期>/<id>.html 这类正文链接，按日期倒序"""
+    html = http_text(url, referer="http://www.fangchan.com/", timeout=20)
+    out, seen = [], set()
+    for m in re.finditer(r"<a href='(/news/\d+/(\d{4}-\d{2}-\d{2})/[^']+\.html)'"
+                         r"(?:[^>]*title='([^']*)')?[^>]*>([^<]*)</a>", html):
+        link, day = m.group(1), m.group(2)
+        if link in seen:
+            continue
+        title = _rss_unescape((m.group(3) or m.group(4) or "").strip())
+        if len(title) < 6:
+            continue
+        seen.add(link)
+        out.append((day, mk_item(title, link, None, "", day, "http://www.fangchan.com")))
+    if not out:
+        raise RuntimeError("中房网新闻页未解析到条目")
+    out.sort(key=lambda x: x[0], reverse=True)
+    return finish([x[1] for x in out], sort_by_heat=False)
+
+
+def p_mur(url):
+    """现代城市研究·检索浏览（土地与房地产）：条目为 <b>题目</b> [作者] + >>详细内容 链接"""
+    html = http_text(url, referer="http://www.mur.cn/", timeout=20)
+    out = []
+    for m in re.finditer(r'<label>\s*·\s*<b>(.*?)</b>(?:\s*\[<span class="author">(.*?)</span>\])?'
+                         r'[\s\S]{0,4000}?<div class="more"><a href="([^"]+)"', html):
+        out.append(mk_item(_rss_unescape(m.group(1)).strip(), m.group(3), None, "",
+                           (m.group(2) or "").strip(), "http://www.mur.cn"))
+    if not out:
+        raise RuntimeError("现代城市研究检索页未解析到条目")
+    return finish(out, sort_by_heat=False)
+
+
+def p_planners(url):
+    """规划师：首页/杂志页找最新一期 → 打开该期「杂志目录导读」取栏目下的文章题目"""
+    idx = http_text(url, referer="http://www.planners.com.cn/", timeout=20)
+    s = re.search(r"/magazine/show/(\d+)\.html", idx)
+    if not s:
+        raise RuntimeError("规划师杂志页没找到最新一期")
+    lab = re.search(r'title="(\d{4}年第\d+期)"', idx)
+    issue = lab.group(1) if lab else ""
+    page = http_text("http://www.planners.com.cn/magazine/show/%s.html" % s.group(1),
+                     referer=url, timeout=20)
+    out, sec = [], ""
+    for m in re.finditer(r'<h4[^>]*>&middot;(.*?)</h4>|<a href="/magazine/article/(\d+)\.html">(.*?)</a>', page):
+        if m.group(1):
+            sec = m.group(1).strip()
+            continue
+        extra = " · ".join(x for x in (issue, sec) if x)
+        out.append(mk_item(_rss_unescape(m.group(3)).strip(),
+                           "/magazine/article/%s.html" % m.group(2), None, "", extra,
+                           "http://www.planners.com.cn"))
+    if not out:
+        raise RuntimeError("规划师本期目录导读未解析到条目")
+    return finish(out, sort_by_heat=False)
+
+
+def p_stats(url):
+    """国家统计局「数据发布」栏目：列表 li > a[title] + span 日期（相对链接按当前页解析）"""
+    html = http_text(url, referer="https://www.stats.gov.cn/", timeout=20)
+    out, seen = [], set()
+    for m in re.finditer(r"<li>\s*<a[^>]+href=\"([^\"]+)\"[^>]*title='([^']{4,120})'", html):
+        href, title = m.group(1), _rss_unescape(m.group(2)).strip()
+        if not title or title in seen:
+            continue
+        seen.add(title)
+        tail = html[m.end():m.end() + 600]
+        dm = re.search(r"(\d{4}-\d{2}-\d{2})", tail)
+        out.append(mk_item(title, href, None, "", dm.group(1) if dm else "", url))
+    if not out:
+        raise RuntimeError("统计局数据发布页未解析到条目")
+    return finish(out, sort_by_heat=False)
+
+
+def p_52pojie(url):
+    """吾爱破解版块列表（Discuz）：每帖一个 tbody，标题在 a.s.xst，回复数在 td.num"""
+    html = http_text(url, referer="https://www.52pojie.cn/", timeout=20)
+    out = []
+    for m in re.finditer(r'<tbody id="normalthread_(\d+)">([\s\S]*?)</tbody>', html):
+        blk = m.group(2)
+        tm = re.search(r'class="s xst"[^>]*>([^<]{4,120})</a>', blk)
+        if not tm:
+            continue
+        title = _rss_unescape(clean_text(tm.group(1)))
+        hm = re.search(r'<td class="num">[\s\S]*?<em>(\d+)</em>', blk)
+        heat = int(hm.group(1)) if hm else None
+        dm = re.search(r"<em><span>(\d{4}-\d{2}-\d{2})", blk)
+        out.append(mk_item(title, "thread-%s-1-1.html" % m.group(1), heat, "",
+                           dm.group(1) if dm else "", url))
+    if not out:
+        raise RuntimeError("吾爱破解列表未解析到帖子")
+    return finish(out, sort_by_heat=False)
+
+
+def p_sucaizy(url):
+    """素材资源：首页「最新发布」列表（posts.posts-item 里的 h2 标题）"""
+    html = http_text(url, referer="https://www.sucaizy.com/", timeout=20)
+    root = parse_html(html)
+    out = []
+    for b in select_all(root, "posts.posts-item")[:60]:
+        a = select_one(b, "h2.item-heading a") or select_one(b, "h2 a")
+        if a is None:
+            continue
+        title = a.get("title") or a.text(120)
+        if len(clean_text(title)) < 5:
+            continue
+        heat = _heat_from(b.text(300), title)
+        out.append(mk_item(title, a.get("href"), heat, node_img(b), "", url))
+    if not out:
+        raise RuntimeError("素材资源最新发布未解析到条目")
+    return finish(out, sort_by_heat=False)
+
+
 PARSERS = {
-    "baidu": p_baidu, "weibo": p_weibo, "bilibili": p_bilibili, "github": p_github,
+    "baidu": p_baidu, "weibo": p_weibo, "bilibili": p_bilibili, "github": p_github,    "crossref": p_crossref, "pubmed": p_pubmed, "gitea": p_gitea,
     "d423": p_d423, "ypojie": p_ypojie, "cr173": p_cr173, "baicaio": p_baicaio,
     "toutiao": p_toutiao, "tophub": p_tophub, "qqnews": p_qqnews, "ithome": p_ithome,
     "sspai": p_sspai, "zhihudaily": p_zhihudaily,
     "rss": p_rss, "juejin": p_juejin, "douban_movie": p_douban_movie, "yicai": p_yicai,
+    "jsonp": p_jsonp, "autohome": p_autohome, "oscar": p_oscar,
     "360news": p_360news, "sse": p_sse, "modelscope": p_modelscope,
+    "weread": p_weread,
+    # V7.9.3：学术期刊官网（当期目录 / 最新论文 / 通知公告 —— 取文章题目，按发布时间排序）
+    "iwep": p_iwep, "ajcass": p_ajcass, "jryj": p_jryj, "cie": p_cie,
+    "cfrn": p_cfrn, "nopss": p_nopss, "gjjryj": p_gjjryj,
+    # V7.9.6：前端渲染站改走官方接口（SciEngine 检索 / 基金成果检索）
+    "sci": p_sci, "kd": p_kd,
+    # V7.9.6：只能渲染的站（JS 人机校验 / React 前端）——用本机浏览器内核跑完再取 DOM
+    "las": p_las, "nstl": p_nstl,
+    # V7.9.14：权威站点专用解析（央行/财政部/财新/央视经济/中房网/现代城市研究/规划师）
+    "pbc": p_pbc, "mof": p_mof, "caixin": p_caixin_econ, "cctv_econ": p_cctv_econ,
+    "fangchan": p_fangchan, "mur": p_mur, "planners": p_planners,
+    # V8.0.2：国家统计局数据发布 / 吾爱破解（Discuz 版块列表）
+    "stats": p_stats, "52pojie": p_52pojie, "sucaizy": p_sucaizy,
 }
 
 
 def run_parser(src, url=None):
     url = url or src.get("url") or ""
-    if not url:
-        raise RuntimeError("未填写地址")
     pid = (src.get("parser") or "auto").lower()
+    if not url and pid != "oscar":   # 静态数据源可无地址
+        raise RuntimeError("未填写地址")
     base = "%s://%s" % (urllib.parse.urlparse(url).scheme, urllib.parse.urlparse(url).netloc)
     sel = src.get("sel") or {}
 
-    def _once():
-        if sel:
-            # 有些站点（如值得买）带上 Referer 反而会被风控，先裸请求再带来源重试
-            html = http_text(url, timeout=18)
-            if len(html) < 2500:
-                html = http_text(url, referer=base + "/", timeout=18)
-            if len(html) < 2500:
-                raise RuntimeError("页面被拦截或内容过短（%d 字节）" % len(html))
-            return parse_by_sel(parse_html(html), url, sel)
-        if pid in PARSERS:
-            return PARSERS[pid](url)
-        if pid == "json":
-            return generic_json(url, base)
-        if pid == "html":
-            return generic_html(url, base)
-        try:
-            return generic_json(url, base)
-        except Exception:
-            return generic_html(url, base)
+    def _try_fetch(u, p, sl):
+        """M5.8/V7.5：参数化单次抓取（主地址/备用通道共用），失败先预热首页再重试一次"""
+        b = "%s://%s" % (urllib.parse.urlsplit(u).scheme, urllib.parse.urlsplit(u).netloc)
 
-    try:
-        items = _once()
-    except Exception as first:
-        # 部分站点校验 Referer/Cookie：先访问首页预热，再重试一次
+        def _once():
+            if sl:
+                # 有些站点（如值得买）带上 Referer 反而会被风控，先裸请求再带来源重试
+                html = http_text(u, timeout=18)
+                if len(html) < 2500:
+                    html = http_text(u, referer=b + "/", timeout=18)
+                if len(html) < 2500:
+                    raise RuntimeError("页面被拦截或内容过短（%d 字节）" % len(html))
+                return parse_by_sel(parse_html(html), u, sl)
+            if p in PARSERS:
+                return PARSERS[p](u)
+            if p == "json":
+                return generic_json(u, b)
+            if p == "html":
+                return generic_html(u, b)
+            try:
+                return generic_json(u, b)
+            except Exception:
+                return generic_html(u, b)
+
         try:
-            fetch_bytes(base + "/", timeout=10)
-            items = _once()
-        except Exception:
-            raise first
+            return _once()
+        except Exception as first:
+            # 部分站点校验 Referer/Cookie：先访问首页预热，再重试一次
+            try:
+                fetch_bytes(b + "/", timeout=10)
+                return _once()
+            except Exception:
+                raise first
+
+    # M5.8/V7.5：多通道降级——主地址失败后依次尝试 alt 备用通道（"备用地址" 或 "备用地址|解析器"）
+    cands = [(url, pid, sel)]
+    for _a in (src.get("alt") or []):
+        _a = str(_a or "").strip()
+        if not _a:
+            continue
+        _u, _, _p = _a.partition("|")
+        cands.append((_u.strip(), _p.strip() or pid, {}))
+    _err = None
+    for _cu, _cp, _cs in cands:
+        try:
+            items = _try_fetch(_cu, _cp, _cs)
+            break
+        except Exception as _e:
+            _err = _e
+    else:
+        raise _err if _err else RuntimeError("全部通道失败")
     if not items:
         raise RuntimeError("解析结果为空")
     return items
@@ -2345,29 +4622,130 @@ class Store:
 STORE = Store()
 REFRESH_GAP = 150
 
+# 同一源同时只允许一个线程在抓：定时预取与用户请求不再重复抓同一个源，
+# 省下线程池资源，整批速度更快
+_INFLIGHT = {}
+_INFLIGHT_LK = threading.Lock()
+
+
+_LAST_STORE_SAVE = [0.0]
+
+
+def _store_save_throttled():
+    """M5.8/V7.5：抓取结果落盘节流（最长 120 秒一次），deadline 快路径的结果也持久化，重启不丢"""
+    try:
+        if time.time() - _LAST_STORE_SAVE[0] > 120:
+            _LAST_STORE_SAVE[0] = time.time()
+            STORE.save()
+    except Exception:
+        pass
+
 
 def refresh_source(src, force=False):
     sid = src["id"]
     cur = STORE.get(sid)
-    if not force and cur and time.time() - cur["ts"] < REFRESH_GAP and cur["items"]:
-        return cur
+    # 快路径：有数据直接返回缓存；完全没数据的失败源只缓存 60 秒就允许重抓
+    # （优化重新请求时间：坏源/网络抖动 1 分钟内即可自动恢复，而不是干等 150 秒）
+    if not force and cur and (cur.get("items") or cur.get("error")):
+        gap = REFRESH_GAP if cur.get("items") else 60
+        if time.time() - cur["ts"] < gap:
+            return cur
+    with _INFLIGHT_LK:
+        ev = _INFLIGHT.get(sid)
+        owner = ev is None
+        if owner:
+            ev = _INFLIGHT[sid] = threading.Event()
+    if not owner:
+        ev.wait(25)          # 别人在抓，直接等结果，不重复抓
+        return STORE.get(sid)
+    items = None
     try:
-        items = run_parser(src)
-        STORE.put(sid, items, "")
-    except Exception as e:
-        msg = str(e) or e.__class__.__name__
-        log("[%s] 失败: %s" % (src.get("name"), msg))
-        old = STORE.get(sid) or {}
-        STORE.put(sid, old.get("items", []), msg)
+        # 失败自动重试一次（网络抖动常见，重试能救回一部分源）
+        for attempt in range(2):
+            try:
+                items = run_parser(src)
+                break
+            except Exception as e:
+                if attempt == 0:
+                    time.sleep(0.6)
+                    continue
+                msg = str(e) or e.__class__.__name__
+                log("[%s] 失败: %s" % (src.get("name"), msg))
+                old = STORE.get(sid) or {}
+                STORE.put(sid, old.get("items", []), msg)
+        if items is not None:
+            STORE.put(sid, items, "")
+    finally:
+        with _INFLIGHT_LK:
+            _INFLIGHT.pop(sid, None)
+        ev.set()
+        _store_save_throttled()      # M5.8/V7.5：结果落盘（节流）
     return STORE.get(sid)
 
 
-def refresh_many(sources, force=False):
+def refresh_many(sources, force=False, deadline=None):
+    """并发抓取多个源。deadline（秒）给定时：到点返回未完成的源列表，
+    让调用方决定转后台继续抓，接口不必陪最慢的源干等。"""
     if not sources:
-        return
-    with ThreadPoolExecutor(max_workers=min(16, len(sources))) as ex:
+        return []
+    if deadline:
+        from concurrent.futures import wait as _cf_wait
+        ex = ThreadPoolExecutor(max_workers=min(24, len(sources)))
+        futs = [ex.submit(refresh_source, s, force) for s in sources]
+        _cf_wait(futs, timeout=deadline)
+        pending = [s for s, f in zip(sources, futs) if not f.done()]
+        for f in futs:
+            f.cancel()
+        ex.shutdown(wait=False)
+        return pending
+    with ThreadPoolExecutor(max_workers=min(24, len(sources))) as ex:
         list(ex.map(lambda s: refresh_source(s, force), sources))
     STORE.save()
+    return []
+
+
+# V7.9.2：后台刷新统一走一个共享线程池 + 按源去重。
+# 页面会并发发 4~5 个 /api/hot，每个请求都开 24 线程池 → 上百线程抢 GIL，
+# 接口响应被拖到 1 秒以上。现在最多 16 个抓取线程，且同一个源不会重复抓。
+_REFRESH_EX = ThreadPoolExecutor(max_workers=16)
+_REFRESH_SET = set()
+_REFRESH_LK = threading.Lock()
+
+
+def refresh_bg(sources, force=False):
+    if not sources:
+        return 0
+    todo = []
+    with _REFRESH_LK:
+        for s in sources:
+            if s.get("id") in _REFRESH_SET:
+                continue
+            _REFRESH_SET.add(s["id"])
+            todo.append(s)
+
+    def run(src):
+        try:
+            refresh_source(src, force)
+        except Exception:
+            pass
+        finally:
+            with _REFRESH_LK:
+                _REFRESH_SET.discard(src.get("id"))
+    for s in todo:
+        _REFRESH_EX.submit(run, s)
+    return len(todo)
+
+
+def _periodic_refresh():
+    """桌面版定时预取：后台强制刷新全部启用源，打开即显示最新缓存，不必等抓取"""
+    while True:
+        time.sleep(240)
+        try:
+            srcs = [s for s in CFG.sources if s["enabled"]]
+            log("定时预取 %d 个源" % len(srcs))
+            refresh_many(srcs, force=True)
+        except Exception as e:
+            log("定时预取异常: %r" % (e,))
 
 
 # ---------------------------------------------------------------- 翻译
@@ -2390,35 +4768,434 @@ def _t_mymemory(text):
     return ((data.get("responseData") or {}).get("translatedText") or "").strip()
 
 
-def translate_text(text):
+def _t_baidu_api(text, keys):
+    """百度翻译开放平台（免费标准版申请 appid）：keys = 'appid|secret'，未配置走降级链"""
+    if not keys:
+        raise RuntimeError("百度翻译未配置密钥")
+    appid, _, secret = keys.partition("|")
+    if not appid or not secret:
+        raise RuntimeError("百度翻译密钥格式应为 appid|secret")
+    salt = str(int(time.time() * 1000))
+    sign = hashlib.md5((appid + text + salt + secret).encode("utf-8")).hexdigest()
+    data = http_json("https://fanyi-api.baidu.com/api/trans/vip/translate?"
+                     + urllib.parse.urlencode({"q": text, "from": "auto", "to": "zh",
+                                               "appid": appid, "salt": salt, "sign": sign}),
+                     timeout=10)
+    if data.get("error_code"):
+        raise RuntimeError("百度翻译 %s" % (data.get("error_msg") or data.get("error_code")))
+    return "".join(r.get("dst", "") for r in (data.get("trans_result") or []))
+
+
+def _t_youdao_api(text, keys):
+    """有道智云（免费额度申请 appkey）：keys = 'appkey|secret'"""
+    if not keys:
+        raise RuntimeError("有道翻译未配置密钥")
+    appkey, _, secret = keys.partition("|")
+    if not appkey or not secret:
+        raise RuntimeError("有道翻译密钥格式应为 appkey|secret")
+    salt = str(int(time.time() * 1000))
+    cur = str(int(time.time()))
+    short = text if len(text) <= 20 else text[:10] + str(len(text)) + text[-10:]
+    sign = hashlib.sha256((appkey + short + salt + cur + secret).encode("utf-8")).hexdigest()
+    data = http_json("https://openapi.youdao.com/api", timeout=10,
+                     data=urllib.parse.urlencode({"q": text, "from": "auto", "to": "zh",
+                                                  "appKey": appkey, "salt": salt, "curtime": cur,
+                                                  "signType": "v3", "sign": sign}).encode())
+    if str(data.get("errorCode", "0")) != "0":
+        raise RuntimeError("有道翻译 errorCode=%s" % data.get("errorCode"))
+    return "".join(data.get("translation") or [])
+
+
+def translate_text(text, engine="google", keys=None):
+    """多引擎翻译：优先所选引擎，失败自动降级（谷歌→MyMemory）；百度/有道需在设置里填密钥"""
     text = (text or "").strip()
     if not text:
         return ""
-    if text in TRANS_CACHE:
-        return TRANS_CACHE[text]
+    ck = (engine or "google") + "|" + text
+    if ck in TRANS_CACHE:
+        return TRANS_CACHE[ck]
     if not re.search(r"[A-Za-z]{3}", text):
         return text
-    for fn in (_t_google, _t_mymemory):
+    keys = keys if isinstance(keys, dict) else {}
+    if engine == "baidu":
+        chain = [(_t_baidu_api, "baidu"), (_t_google, None), (_t_mymemory, None)]
+    elif engine == "youdao":
+        chain = [(_t_youdao_api, "youdao"), (_t_google, None), (_t_mymemory, None)]
+    elif engine == "mymemory":
+        chain = [(_t_mymemory, None), (_t_google, None)]
+    else:
+        chain = [(_t_google, None), (_t_mymemory, None)]
+    for fn, need in chain:
+        if need and not keys.get(need):
+            continue
         try:
-            r = fn(text)
-            if r and not r.lower().startswith("myMemory".lower()) and len(r) > 1:
-                TRANS_CACHE[text] = r
+            r = fn(text, keys.get(need)) if need else fn(text)
+            if r and not r.lower().startswith("mymemory") and len(r) > 1:
+                TRANS_CACHE[ck] = r
                 return r
         except Exception:
             continue
     return ""
 
 
-def translate_many(texts):
+def translate_many(texts, engine="google", keys=None):
     texts = [t for t in (texts or []) if isinstance(t, str) and t.strip()][:60]
     out = {}
     if not texts:
         return out
-    with ThreadPoolExecutor(max_workers=4) as ex:
-        for src, dst in zip(texts, ex.map(translate_text, texts)):
+    with ThreadPoolExecutor(max_workers=4) as ex:   # M5.5/V7.2 实测 8 并发会触发上游限流反而变慢，保持 4
+        for src, dst in zip(texts, ex.map(lambda t: translate_text(t, engine, keys), texts)):
             if dst:
                 out[src] = dst
     return out
+
+
+# ---------------- V7.8.5：离线标题翻译（Argos 插槽 + CTranslate2 预留 + 本地缓存） ----------------
+# 设计：界面层只认 /api/translate(engine="auto")；引擎优先级 = 本地缓存 → Argos 离线 → CTranslate2(预留) → 在线降级链。
+# 任何一步失败都静默跳过（前端不显示翻译行、不报错），绝不改动原始标题。
+
+_TRANS_KEYS_FILE = os.path.join(data_dir(), "trans_keys.json")     # 百度/有道密钥（仅本机，不上云）
+_TR_CACHE_FILE = os.path.join(data_dir(), "translate_cache.json")  # 标题翻译缓存（本机持久）
+_TR_LOCK = threading.Lock()
+_TR_DISK = {}          # 标题 -> 中文译文
+_TR_KEYS_FILE_DATA = {}  # {baidu: "appid|secret", youdao: "appkey|secret"}
+
+
+def _tr_load_all():
+    global _TR_DISK, _TR_KEYS_FILE_DATA
+    try:
+        with open(_TR_CACHE_FILE, encoding="utf-8") as f:
+            d = json.load(f)
+        if isinstance(d, dict):
+            _TR_DISK = {k: v for k, v in d.items() if isinstance(k, str) and isinstance(v, str) and v}
+    except Exception:
+        _TR_DISK = {}
+    try:
+        with open(_TRANS_KEYS_FILE, encoding="utf-8") as f:
+            d = json.load(f)
+        if isinstance(d, dict):
+            _TR_KEYS_FILE_DATA = {k: str(v) for k, v in d.items() if isinstance(k, str)}
+    except Exception:
+        _TR_KEYS_FILE_DATA = {}
+
+
+def _tr_save_cache():
+    try:
+        if len(_TR_DISK) > 8000:   # 超限只保留最新一半
+            keep = list(_TR_DISK.items())[-4000:]
+            _TR_DISK.clear()
+            _TR_DISK.update(dict(keep))
+        tmp = _TR_CACHE_FILE + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(_TR_DISK, f, ensure_ascii=False)
+        os.replace(tmp, _TR_CACHE_FILE)
+    except Exception:
+        pass
+
+
+def trans_keys_get():
+    with _TR_LOCK:
+        return dict(_TR_KEYS_FILE_DATA)
+
+
+def trans_keys_set(keys):
+    with _TR_LOCK:
+        for k, v in (keys or {}).items():
+            if k in ("baidu", "youdao") and isinstance(v, str):
+                if v.strip():
+                    _TR_KEYS_FILE_DATA[k] = v.strip()
+                else:
+                    _TR_KEYS_FILE_DATA.pop(k, None)
+        try:
+            tmp = _TRANS_KEYS_FILE + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(_TR_KEYS_FILE_DATA, f, ensure_ascii=False)
+            os.replace(tmp, _TRANS_KEYS_FILE)
+        except Exception:
+            pass
+        return dict(_TR_KEYS_FILE_DATA)
+
+
+# ---------------- V7.9：离线翻译模型（Marian + CTranslate2，Argos 官方 en→zh 包） ----------------
+# 模型不打进安装包（68MB），首次在「设置 → 翻译」点「下载离线翻译模型」联网下一份，
+# 解压到 <数据目录>/models/ 后永久离线可用；不改动原始标题，失败静默。
+
+OFFLINE_DIR = os.path.join(data_dir(), "models")
+OFFLINE_PKG = "translate-en_zh-1_9"
+OFFLINE_ROOT = os.path.join(OFFLINE_DIR, OFFLINE_PKG)
+OFFLINE_MODEL_URLS = [
+    "https://argos-net.com/v1/translate-en_zh-1_9.argosmodel",
+]
+OFFLINE_TOTAL = 70743021            # 已知体积，用于进度条初值
+
+_OFF = {"state": "idle", "got": 0, "total": OFFLINE_TOTAL, "msg": "", "thread": None}
+_OFF_LOCK = threading.Lock()
+
+
+def offline_runtime():
+    """运行库是否可用（ctranslate2 + sentencepiece 是否在当前程序里）。"""
+    try:
+        import ctranslate2  # noqa: F401
+        import sentencepiece  # noqa: F401
+        _OFF["rt_err"] = ""
+        return True
+    except Exception as e:
+        _OFF["rt_err"] = "%s: %s" % (e.__class__.__name__, e)
+        return False
+
+
+class _CT2Engine:
+    """opus-mt-en-zh + CTranslate2 int8 离线引擎；懒加载，缺模型/缺运行库时静默不可用。"""
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._tr = None
+        self._sp = None
+        self._prefix = []
+        self._bad = ""
+
+    def model_files(self):
+        return (os.path.join(OFFLINE_ROOT, "model", "model.bin"),
+                os.path.join(OFFLINE_ROOT, "sentencepiece.model"))
+
+    def installed(self):
+        m, s = self.model_files()
+        return os.path.exists(m) and os.path.exists(s)
+
+    def available(self):
+        if self._tr is not None:
+            return True
+        return self.installed() and offline_runtime()
+
+    def _load(self):
+        if self._tr is not None:
+            return True
+        with self._lock:
+            if self._tr is not None:
+                return True
+            m, s = self.model_files()
+            if not (os.path.exists(m) and os.path.exists(s)):
+                self._bad = "未下载离线模型"
+                return False
+            try:
+                import ctranslate2
+                import sentencepiece as spm
+                cpus = os.cpu_count() or 2
+                self._tr = ctranslate2.Translator(
+                    os.path.dirname(m), device="cpu", compute_type="int8",
+                    inter_threads=1, intra_threads=max(2, min(4, cpus)))
+                self._sp = spm.SentencePieceProcessor(model_file=s)
+                pf = self._sp.encode(">>cmn_Hans<<", out_type=str)
+                self._prefix = pf if len(pf) == 1 else []   # 目标语言标记（中文简体）
+                self._bad = ""
+                return True
+            except Exception as e:
+                self._bad = str(e) or e.__class__.__name__
+                self._tr = None
+                return False
+
+    def unload(self):
+        with self._lock:
+            self._tr = None
+            self._sp = None
+
+    def translate_batch(self, texts, beam_size=2):
+        texts = [t for t in (texts or []) if isinstance(t, str) and t.strip()]
+        if not texts or not self._load():
+            return {}
+        try:
+            toks = [list(self._prefix) + self._sp.encode(t, out_type=str) for t in texts]
+            res = self._tr.translate_batch(toks, beam_size=beam_size, max_batch_size=32,
+                                           batch_type="examples", max_decoding_length=256)
+        except Exception as e:
+            self._bad = str(e) or e.__class__.__name__
+            self.unload()
+            return {}
+        out = {}
+        for t, r in zip(texts, res):
+            try:
+                hyp = [x for x in r.hypotheses[0] if x not in ("</s>", "<pad>")]
+                s = self._sp.decode(hyp).replace("\u2581", " ")
+                s = re.sub(r"\s{2,}", " ", s).strip().strip(" ,.")
+                if s and s != t:
+                    out[t] = s
+            except Exception:
+                continue
+        return out
+
+    def translate(self, text):
+        return self.translate_batch([text], beam_size=1).get(text, "")
+
+
+ARGOS = _CT2Engine()      # 名字沿用：前端与历史接口不变
+
+
+def offline_local_size():
+    tot = 0
+    for root, _, files in os.walk(OFFLINE_ROOT):
+        for f in files:
+            try:
+                tot += os.path.getsize(os.path.join(root, f))
+            except Exception:
+                pass
+    return tot
+
+
+def offline_status():
+    with _OFF_LOCK:
+        st, got, total, msg = _OFF["state"], _OFF["got"], _OFF["total"], _OFF["msg"]
+    if st == "ready" and not ARGOS.installed():
+        st = "idle"
+    if st == "idle" and ARGOS.installed():
+        st = "ready"
+    total = int(total or OFFLINE_TOTAL)
+    return {"state": st, "got": int(got), "total": total,
+            "pct": max(0, min(100, int(100.0 * got / total))) if total else 0,
+            "msg": msg, "installed": bool(ARGOS.installed()), "runtime": offline_runtime(),
+            "size": offline_local_size(), "engine": "Marian + CTranslate2 (int8)",
+            "rtErr": _OFF.get("rt_err", "")}
+
+
+def _offline_download_worker():
+    tmp = os.path.join(OFFLINE_DIR, "_dl.argosmodel")
+    try:
+        os.makedirs(OFFLINE_DIR, exist_ok=True)
+        last = ""
+        for url in OFFLINE_MODEL_URLS:
+            try:
+                req = urllib.request.Request(url, headers={"User-Agent": UA})
+                with urllib.request.urlopen(req, timeout=30) as r:
+                    total = int(r.headers.get("Content-Length") or OFFLINE_TOTAL)
+                    with _OFF_LOCK:
+                        _OFF.update({"state": "downloading", "got": 0, "total": total,
+                                     "msg": "正在下载模型"})
+                    with open(tmp, "wb") as f:
+                        while True:
+                            chunk = r.read(262144)
+                            if not chunk:
+                                break
+                            f.write(chunk)
+                            with _OFF_LOCK:
+                                _OFF["got"] += len(chunk)
+                last = ""
+                break
+            except Exception as e:
+                last = str(e) or e.__class__.__name__
+        if last:
+            raise RuntimeError("下载失败：" + last)
+        with _OFF_LOCK:
+            _OFF.update({"state": "unpacking", "msg": "正在解压安装"})
+        import zipfile
+        with zipfile.ZipFile(tmp) as z:
+            names = z.namelist()
+            root = names[0].split("/")[0] if names else OFFLINE_PKG
+            if os.path.isdir(OFFLINE_ROOT):
+                shutil.rmtree(OFFLINE_ROOT, ignore_errors=True)
+            z.extractall(OFFLINE_DIR)
+        src = os.path.join(OFFLINE_DIR, root)
+        if os.path.isdir(src) and os.path.abspath(src) != os.path.abspath(OFFLINE_ROOT):
+            if os.path.isdir(OFFLINE_ROOT):
+                shutil.rmtree(OFFLINE_ROOT, ignore_errors=True)
+            os.replace(src, OFFLINE_ROOT)
+        try:
+            os.remove(tmp)
+        except Exception:
+            pass
+        ARGOS.unload()
+        with _OFF_LOCK:
+            _OFF.update({"state": "ready", "got": _OFF["total"], "msg": "离线模型已就绪"})
+    except Exception as e:
+        with _OFF_LOCK:
+            _OFF.update({"state": "error", "msg": str(e) or e.__class__.__name__})
+    finally:
+        with _OFF_LOCK:
+            _OFF["thread"] = None
+
+
+def offline_start_download():
+    if not offline_runtime():
+        return {"ok": False, "error": "当前程序缺少离线运行库（ctranslate2 / sentencepiece），请用新版安装包"}
+    with _OFF_LOCK:
+        if _OFF["state"] in ("downloading", "unpacking"):
+            return {"ok": True, "state": _OFF["state"]}
+        _OFF.update({"state": "downloading", "got": 0, "total": OFFLINE_TOTAL,
+                     "msg": "正在连接"})
+        t = threading.Thread(target=_offline_download_worker, daemon=True)
+        _OFF["thread"] = t
+        t.start()
+    return {"ok": True, "state": "downloading"}
+
+
+def offline_delete():
+    try:
+        ARGOS.unload()
+        shutil.rmtree(OFFLINE_ROOT, ignore_errors=True)
+        with _OFF_LOCK:
+            _OFF.update({"state": "idle", "got": 0, "msg": ""})
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def offline_tr_status():
+    try:
+        return {"argos": bool(ARGOS.available()), "model": bool(ARGOS.installed()),
+                "runtime": offline_runtime(), "state": _OFF["state"]}
+    except Exception:
+        return {"argos": False, "model": False, "runtime": False, "state": "idle"}
+
+
+def translate_titles(texts, keys=None, engine="auto"):
+    """新闻标题批量翻译：本地缓存 → 离线模型（Marian + CTranslate2）→ 在线降级链（失败重试一轮）。
+    只返回成功项，失败项留给前端下一轮再补（不显示空翻译行，也不改原文）。"""
+    req, seen = [], set()
+    for t in (texts or []):
+        if isinstance(t, str) and t.strip() and t not in seen:
+            seen.add(t)
+            req.append(t.strip())
+    if not req:
+        return {}
+    out = {}
+    with _TR_LOCK:
+        for t in req:
+            v = _TR_DISK.get(t)
+            if v:
+                out[t] = v
+    rest = [t for t in req if t not in out]
+    # 1) 离线模型（已下载时整批推理，几百毫秒出结果，不联网）
+    if rest and engine in ("auto", "argos") and ARGOS.installed():
+        try:
+            out.update(ARGOS.translate_batch(rest, beam_size=2))
+        except Exception:
+            pass
+        rest = [t for t in rest if t not in out]
+    # 2) 在线降级链（没装离线模型 / 离线失败时）：失败再来一轮，避免「只翻前几条」
+    if rest and engine in ("auto", "google", "baidu", "youdao", "mymemory"):
+        eng = "google" if engine == "auto" else engine
+        kk = trans_keys_get()
+        if isinstance(keys, dict):
+            kk.update(keys)              # 前端传入的密钥优先
+        for attempt in range(2):
+            if not rest:
+                break
+            try:
+                got = translate_many(rest, eng, kk)
+            except Exception:
+                got = {}
+            if got:
+                out.update(got)
+                rest = [t for t in rest if t not in out]
+            if rest and attempt == 0:
+                time.sleep(0.35)
+    if out:
+        with _TR_LOCK:
+            for k, v in out.items():
+                if v:
+                    _TR_DISK[k] = v
+            _tr_save_cache()
+    return out
+
+
+_tr_load_all()   # 启动即加载翻译缓存与密钥文件（静默，文件缺失不报错）
 
 
 # ---------------------------------------------------------------- 页面
@@ -2492,11 +5269,28 @@ class Handler(BaseHTTPRequestHandler):
     def _send(self, code, body, ctype="application/json; charset=utf-8", extra=None):
         if isinstance(body, str):
             body = body.encode("utf-8")
+        hdr = dict(extra or {})
+        # V7.9.2：文本响应走 gzip。config 137KB→19KB、hot 290KB→78KB，
+        # 手机流量和首屏等待都能省一大半（图片/音频等二进制不动）
+        try:
+            ae = (self.headers.get("Accept-Encoding") or "").lower()
+        except Exception:
+            ae = ""
+        if (code == 200 and len(body) >= 700 and "gzip" in ae
+                and (ctype.startswith("application/json") or ctype.startswith("text/")
+                     or ctype.startswith("application/javascript"))
+                and "Content-Encoding" not in hdr):
+            try:
+                body = gzip.compress(body, 6)
+                hdr["Content-Encoding"] = "gzip"
+                hdr["Vary"] = "Accept-Encoding"
+            except Exception:
+                pass
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
-        for k, v in (extra or {}).items():
+        for k, v in hdr.items():
             self.send_header(k, v)
         self.end_headers()
         try:
@@ -2504,8 +5298,37 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             pass
 
-    def _json(self, obj, code=200):
-        self._send(code, json.dumps(obj, ensure_ascii=False), "application/json; charset=utf-8")
+    def _json(self, obj, code=200, extra=None):
+        self._send(code, json.dumps(obj, ensure_ascii=False),
+                   "application/json; charset=utf-8", extra)
+
+    def _fb_list(self, qs):
+        """建议/反馈列表：mode = public(已审核) | mine(我的) | admin(审核台，仅管理员)。GET/POST 共用。"""
+        mode = (qs.get("mode") or ["public"])[0]
+        is_admin = bool(ACCOUNT.user and
+                        ACCOUNT.user.get("email") == FEEDBACK_ADMIN_EMAIL)
+        if mode == "admin" and not is_admin:
+            self._json({"ok": False, "error": "仅管理员可查看审核台"})
+            return
+        if mode == "mine":
+            if not ACCOUNT.user:
+                self._json({"ok": True, "items": [], "isAdmin": False})
+                return
+            q = ("/v1/rdb/rest/feedback?user_id=eq.%s&order=created_at.desc&limit=100"
+                 % urllib.parse.quote(str(ACCOUNT.user["sub"])))
+        else:
+            # admin：全部（含待审核）；public：仅已通过（含作者回复）
+            q = "/v1/rdb/rest/feedback?order=created_at.desc&limit=100"
+            if mode != "admin":
+                q = ("/v1/rdb/rest/feedback?status=eq.approved&deleted=eq.false"
+                     "&order=created_at.desc&limit=100")
+        ok, r = _cb_request("GET", q,
+                            token=ACCOUNT.access_token if ACCOUNT.user else None)
+        if not ok:
+            self._json({"ok": False, "error": r.get("error") or "加载失败"})
+            return
+        items = r if isinstance(r, list) else (r.get("data") or [])
+        self._json({"ok": True, "items": items, "isAdmin": is_admin})
 
     def do_GET(self):
         p = urllib.parse.urlparse(self.path)
@@ -2513,6 +5336,36 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if path in ("/", "/index.html"):
                 self._send(200, PAGE, "text/html; charset=utf-8")
+            elif path in ("/dl", "/download"):
+                # 手机下载页：静态托管上的安装包页面（网页版入口处也给这个短链）
+                self.send_response(302)
+                self.send_header("Location", DL_PAGE_URL)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+            elif path == "/api/feedback/list":
+                self._fb_list(qs)
+            elif path == "/api/auth/me":
+                # M8.0：当前登录态（前端启动时调用；含云端是否有配置 / 本机是否全新安装）
+                logged = ACCOUNT.resume()
+                has_cloud = None
+                if logged:
+                    okc, ccfg = ACCOUNT.cloud_pull()
+                    has_cloud = bool(okc and ccfg)
+                self._json({"ok": True, "logged": logged, "user": ACCOUNT.user,
+                            "admin": is_admin(),
+                            "hasCloudCfg": has_cloud, "fresh": bool(CFG.is_new)})
+            elif path == "/api/ad":
+                # V7.9.4：推广位内容（公开只读，所有端拉同一份；写入需作者登录）
+                self._json({"ok": True, "ad": ad_block(), "ts": time.time()},
+                           extra={"Access-Control-Allow-Origin": "*"})
+            elif path == "/api/cert/list":
+                # V7.8.1：证书修复面板数据（哪些站点证书链有问题、下载/安装状态）
+                self._json({"ok": True, "items": cert_issues_payload()})
+            elif path == "/api/offline/status":
+                self._json({"ok": True, "status": offline_status()})
+            elif path == "/api/trans/keys":
+                # V7.8.5：读取本机保存的百度/有道密钥（启动时前端自动回填 localStorage）
+                self._json({"ok": True, "keys": trans_keys_get()})
             elif path == "/api/config":
                 self._json({"app": APP_VER, "author": AUTHOR, "name": APP_NAME,
                             "settings": CFG.settings, "sources": CFG.sources,
@@ -2522,13 +5375,45 @@ class Handler(BaseHTTPRequestHandler):
                 ids = [x for x in (qs.get("ids", [""])[0] or "").split(",") if x]
                 force = qs.get("force", ["0"])[0] == "1"
                 srcs = [s for s in CFG.sources if s["id"] in ids and s["enabled"]]
-                refresh_many(srcs, force=force)
-                out = {}
+                # 缓存秒开：有缓存的源立即返回旧内容（哪怕已过期），
+                # 过期源转后台线程刷新；只有"完全没数据"的源才现场等待抓取。
+                ready, stale, out = [], [], {}
+                # V7.9.2：等源的时间可调，并且最近抓失败的源不再现场等（反正还是失败），
+                # 只丢后台重试——否则一个坏源能把整批首屏拖到 7 秒。
+                try:
+                    wait_s = max(0.0, min(6.0, float(qs.get("wait", ["2.5"])[0])))
+                except Exception:
+                    wait_s = 2.5
                 for s in srcs:
                     cur = STORE.get(s["id"]) or {}
-                    out[s["id"]] = {"items": (cur.get("items") or [])[:120],
-                                    "error": cur.get("error", ""), "ts": cur.get("ts", 0)}
-                self._json({"ok": True, "sources": out, "now": time.time()})
+                    items = cur.get("items") or []
+                    if (not force and not items and cur.get("error")
+                            and time.time() - cur.get("ts", 0) < 90):
+                        out[s["id"]] = {"items": [], "error": cur.get("error", ""),
+                                        "ts": cur.get("ts", 0)}
+                        stale.append(s)
+                        continue
+                    if force or not items:
+                        ready.append(s)
+                    else:
+                        out[s["id"]] = {"items": items[:120],
+                                        "error": cur.get("error", ""), "ts": cur.get("ts", 0)}
+                        if time.time() - cur.get("ts", 0) > REFRESH_GAP:
+                            stale.append(s)
+                if ready:
+                    # 限时抓取：最多等 7 秒，没抓完的转后台继续，接口不陪慢源干等
+                    pending = refresh_many(ready, force=force, deadline=wait_s)
+                    for s in ready:
+                        cur = STORE.get(s["id"]) or {}
+                        out[s["id"]] = {"items": (cur.get("items") or [])[:120],
+                                        "error": cur.get("error", ""), "ts": cur.get("ts", 0)}
+                    if pending:
+                        refresh_bg(pending, force=force)
+                        stale.extend(pending)
+                if stale and not force:
+                    refresh_bg(stale)
+                self._json({"ok": True, "sources": out, "now": time.time(),
+                            "stale": [s["id"] for s in stale if not force]})
             elif path == "/api/test":
                 url = qs.get("url", [""])[0]
                 pid = qs.get("parser", ["auto"])[0]
@@ -2559,7 +5444,25 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"ok": True, "history": CFG.history})
             elif path == "/api/translate":
                 texts = json.loads(qs.get("texts", ["[]"])[0])
-                self._json({"ok": True, "map": translate_many(texts)})
+                engine = qs.get("engine", ["google"])[0]
+                self._json({"ok": True, "map": translate_many(texts, engine)})
+            elif path == "/sdk.global.js":
+                # V6.7：云服务 SDK（建议反馈上云用）；exe 由 --add-data 打包进 _MEIPASS
+                cands = []
+                if getattr(sys, "_MEIPASS", ""):
+                    cands.append(os.path.join(sys._MEIPASS, "sdk.global.js"))
+                cands.append(os.path.join(exe_dir(), "sdk.global.js"))
+                got = None
+                for p in cands:
+                    if os.path.exists(p):
+                        got = p
+                        break
+                if got:
+                    with open(got, "rb") as f:
+                        self._send(200, f.read(), "application/javascript",
+                                   {"Cache-Control": "public, max-age=3600"})
+                else:
+                    self._send(404, b"// sdk not found", "application/javascript")
             elif path == "/img":
                 got = img_fetch(qs.get("u", [""])[0], qs.get("r", [""])[0])
                 if not got:
@@ -2602,15 +5505,138 @@ class Handler(BaseHTTPRequestHandler):
             log("GET %s 异常: %r" % (path, e))
             self._json({"ok": False, "error": str(e) or e.__class__.__name__}, 500)
 
+    def do_OPTIONS(self):
+        # V7.9.4：桌面版/网页版跨域拉取推广位（GET/POST /api/ad）需要预检放行
+        self._send(200, b"", "text/plain; charset=utf-8",
+                   {"Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                    "Access-Control-Allow-Headers": "Content-Type",
+                    "Access-Control-Max-Age": "86400"})
+
     def do_POST(self):
         p = urllib.parse.urlparse(self.path)
+        qs = urllib.parse.parse_qs(p.query)
         n = int(self.headers.get("Content-Length") or 0)
         try:
             body = json.loads((self.rfile.read(n) if n else b"{}").decode("utf-8") or "{}")
         except Exception:
             body = {}
         try:
+            if p.path == "/api/translate":
+                # V6.9/M5.2：整页翻译（POST JSON {texts, engine, keys}）；keys 由前端本地存储传入
+                # V7.8.5：engine="auto" → 标题翻译管线（本地缓存 → Argos 离线 → 在线降级），失败静默
+                texts = body.get("texts") or []
+                engine = str(body.get("engine") or "google")
+                keys = body.get("keys") if isinstance(body.get("keys"), dict) else {}
+                if engine == "auto":
+                    self._json({"ok": True, "map": translate_titles(texts, keys, "auto"),
+                                "offline": offline_tr_status()})
+                else:
+                    self._json({"ok": True, "map": translate_many(texts, engine, keys)})
+                return   # M5.3/V7.0：必须 return，否则落到链尾 else 再写一次 404（重复写响应）
+            if p.path == "/api/trans/keys":
+                # V7.8.5：百度/有道密钥持久化（仅存本机 trans_keys.json，不进配置、不跟云同步）
+                ks = body.get("keys") if isinstance(body.get("keys"), dict) else None
+                if ks is None:
+                    self._json({"ok": True, "keys": trans_keys_get()})
+                else:
+                    self._json({"ok": True, "keys": trans_keys_set(ks)})
+                return
+            # ---------------- V7.9：离线翻译模型（下载 / 状态 / 删除） ----------------
+            if p.path in ("/api/offline/status", "/api/offline/download", "/api/offline/delete"):
+                if p.path == "/api/offline/download":
+                    r = offline_start_download()
+                    r["status"] = offline_status()
+                    self._json(r)
+                elif p.path == "/api/offline/delete":
+                    r = offline_delete()
+                    r["status"] = offline_status()
+                    self._json(r)
+                else:
+                    self._json({"ok": True, "status": offline_status(),
+                                "probe": bool(ARGOS.available())})
+                return
+            # ---------------- V7.8.1：证书修复 ----------------
+            if p.path == "/api/cert/chain":
+                host = str(body.get("host") or "").strip().lower()
+                if not host or "/" in host:
+                    self._json({"ok": False, "error": "缺少 host"}); return
+                r = cert_chain_probe(host)
+                if r.get("ok"):
+                    e = CERT_ISSUES.get(host) or {}
+                    old = {c.get("thumb"): c for c in (e.get("chain") or [])}
+                    for c in r["chain"]:
+                        oc = old.get(c.get("thumb")) or {}
+                        c["saved"] = oc.get("saved", False)
+                        c["installed"] = oc.get("installed", False)
+                        if oc.get("file"):
+                            c["file"] = oc["file"]
+                    e["chain"] = r["chain"]
+                    e["err"] = e.get("err") or "证书链不完整"
+                    e["ts"] = time.time()
+                    CERT_ISSUES[host] = e
+                    _cert_save()
+                    self._json({"ok": True, "items": cert_issues_payload()})
+                else:
+                    self._json({"ok": False, "error": r.get("err", "探测失败")})
+                return
+            if p.path == "/api/cert/install":
+                host = str(body.get("host") or "").strip().lower()
+                ok, msg = cert_chain_install(host)
+                self._json({"ok": ok, "error": None if ok else msg, "msg": msg,
+                            "items": cert_issues_payload()})
+                return
+            if p.path == "/api/cert/forget":
+                host = str(body.get("host") or "").strip().lower()
+                CERT_ISSUES.pop(host, None)
+                _cert_save()
+                self._json({"ok": True, "items": cert_issues_payload()})
+                return
+            if p.path == "/api/openurl":
+                # V7.9.5：桌面版点源圆点 → 用系统默认浏览器打开（网页版不执行，防止远端拿服务端开浏览器）
+                u = str(body.get("url") or "").strip()
+                if not (u.startswith("http://") or u.startswith("https://")):
+                    self._json({"ok": False, "error": "地址不合法"})
+                    return
+                if os.environ.get("REBANG_NO_BROWSER") == "1" and not os.environ.get("REBANG_ALLOW_OPEN"):
+                    self._json({"ok": False, "error": "helmet"})
+                    return
+                ok = False
+                try:
+                    import webbrowser
+                    ok = bool(webbrowser.open(u))
+                except Exception as e:
+                    log("打开外链失败: %r" % (e,))
+                self._json({"ok": ok})
+                return
+            if p.path == "/api/ad":
+                # V7.9.4：只有作者（管理员邮箱登录）能改推广位；改完全网客户端下次启动自动同步
+                if not is_admin():
+                    self._json({"ok": False, "error": "仅作者可修改推广位（请先用作者账号登录）"},
+                               extra={"Access-Control-Allow-Origin": "*"})
+                    return
+                ad = body.get("ad") if isinstance(body.get("ad"), dict) else {}
+                clean = {}
+                for k in AD_KEYS:
+                    if k in ad:
+                        clean[k] = str(ad.get(k) or "")[:400]
+                if not clean:
+                    self._json({"ok": False, "error": "没有需要保存的内容"},
+                               extra={"Access-Control-Allow-Origin": "*"})
+                    return
+                CFG.update({"settings": clean})
+                log("推广位已更新：%s" % ", ".join(clean.keys()))
+                self._json({"ok": True, "ad": ad_block()},
+                           extra={"Access-Control-Allow-Origin": "*"})
+                return
             if p.path == "/api/config":
+                # V7.9.4：推广位字段是作者专属，非管理员提交时一律忽略（保留服务端现值）
+                body = dict(body or {})
+                if not is_admin() and isinstance(body.get("settings"), dict):
+                    st = dict(body["settings"])
+                    for k in AD_KEYS:
+                        st.pop(k, None)
+                    body["settings"] = st
                 res = CFG.update(body)
                 valid = {s["id"] for s in CFG.sources}
                 with STORE.lock:
@@ -2618,6 +5644,136 @@ class Handler(BaseHTTPRequestHandler):
                         if k not in valid:
                             STORE.data.pop(k, None)
                 self._json({"ok": True, **res})
+                # M8.0：登录状态下保存配置 → 自动上传云端（只传设置习惯+收藏，节约云存储）
+                if ACCOUNT.user:
+                    threading.Thread(target=ACCOUNT.cloud_push,
+                                     args=(dict(CFG.settings), list(CFG.favorites)),
+                                     daemon=True).start()
+            # ---------------- M8.0：账号与云同步 ----------------
+            elif p.path == "/api/auth/sendcode":
+                # 发送邮箱验证码。body: {email, purpose: 'register'|'reset'}
+                email = str(body.get("email") or "").strip()
+                if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+                    self._json({"ok": False, "error": "邮箱格式不正确"})
+                    return
+                ok, r = ACCOUNT.send_code(email, exist_only=(body.get("purpose") == "reset"))
+                self._json({"ok": ok, "error": None if ok else r, "vid": r.get("vid") if ok else "",
+                            "isUser": r.get("is_user") if ok else None})
+            elif p.path == "/api/auth/register":
+                # 邮箱注册：密码按腾讯云 CloudBase 要求至少 8 位；昵称仅中文/字母
+                email = str(body.get("email") or "").strip()
+                pwd = str(body.get("password") or "")
+                code = str(body.get("code") or "").strip()
+                vid = str(body.get("vid") or "")
+                nick = str(body.get("nickname") or "").strip()
+                if not re.match(r"^(?=.*[A-Za-z])(?=.*\d).{8,16}$", pwd):
+                    self._json({"ok": False, "error": "密码需为英文+数字，8~16 位"})
+                    return
+                if nick and not re.fullmatch(r"[\u4e00-\u9fa5A-Za-z]{1,24}", nick):
+                    self._json({"ok": False, "error": "昵称只能包含中文和字母"})
+                    return
+                ok, r = ACCOUNT.register(email, code, vid, pwd, nick)
+                self._json({"ok": ok, "error": None if ok else r, "user": ACCOUNT.user})
+            elif p.path == "/api/auth/login":
+                email = str(body.get("email") or "").strip()
+                pwd = str(body.get("password") or "")
+                ok, r = ACCOUNT.login(email, pwd)
+                self._json({"ok": ok, "error": None if ok else r, "user": ACCOUNT.user})
+            elif p.path == "/api/auth/logout":
+                ACCOUNT.logout()
+                self._json({"ok": True})
+            elif p.path == "/api/auth/resetpwd":
+                # 找回密码：邮箱验证码通过 → 直接设置新密码（英文+数字，8~16 位）
+                email = str(body.get("email") or "").strip()
+                pwd = str(body.get("password") or "")
+                if not re.match(r"^(?=.*[A-Za-z])(?=.*\d).{8,16}$", pwd):
+                    self._json({"ok": False, "error": "密码需为英文+数字，8~16 位"})
+                    return
+                ok, r = ACCOUNT.reset_password(email, str(body.get("code") or ""),
+                                               str(body.get("vid") or ""), pwd)
+                self._json({"ok": ok, "error": None if ok else r})
+            elif p.path == "/api/cloud/push":
+                # 手动备份：设置习惯 + 收藏 + 新增（非内置）新闻源一起上传；浏览记录不参与
+                _dids = {s["id"] for s in DEFAULT_SOURCES}
+                _custom = [s for s in CFG.sources if s.get("id") not in _dids]
+                ok, r = ACCOUNT.cloud_push(dict(CFG.settings), list(CFG.favorites), _custom)
+                self._json({"ok": ok, "error": None if ok else r,
+                            "customCount": len(_custom)})
+            elif p.path == "/api/cloud/pull":
+                # 手动恢复：设置+收藏直接生效；云端新增源合并进本地（内置源不动）
+                ok, r = ACCOUNT.cloud_pull()
+                if not ok:
+                    self._json({"ok": False, "error": r})
+                    return
+                if not r:
+                    self._json({"ok": True, "empty": True})
+                    return
+                # V8.0.2：窗口形式不跟云端走（独立窗口是本机默认，别被别端的设置顶掉）
+                if isinstance(r.get("settings"), dict):
+                    r["settings"].pop("openMode", None)
+                res = CFG.update(r)
+                if isinstance(r.get("favorites"), list):
+                    CFG.favorites = r["favorites"]
+                if isinstance(r.get("custom_sources"), list):
+                    have = {s["id"] for s in CFG.sources}
+                    for s in r["custom_sources"]:
+                        if isinstance(s, dict) and s.get("id") and s["id"] not in have:
+                            CFG.sources.append(CFG._norm_sources([s])[0])
+                            have.add(s["id"])
+                CFG.save()
+                valid = {s["id"] for s in CFG.sources}
+                with STORE.lock:
+                    for k in list(STORE.data):
+                        if k not in valid:
+                            STORE.data.pop(k, None)
+                self._json({"ok": True, "settings": res.get("settings"),
+                            "sources": CFG.sources,
+                            "favorites": CFG.favorites})
+            elif p.path == "/api/feedback/submit":
+                # 建议/反馈上云（登录或匿名均可提交，登录则绑定账号便于追溯）
+                content = str(body.get("content") or "").strip()
+                contact = str(body.get("contact") or "").strip()[:60]
+                kind = str(body.get("kind") or "suggestion")
+                if kind not in ("suggestion", "reply"):
+                    kind = "suggestion"
+                if not content or len(content) > 300:
+                    self._json({"ok": False, "error": "内容为空或超过 300 字"})
+                    return
+                uid = (ACCOUNT.user or {}).get("sub") or ""
+                email = (ACCOUNT.user or {}).get("email") or ""
+                pid = None
+                if kind == "reply":
+                    try:
+                        pid = int(str(body.get("parent_id") or ""))
+                    except Exception:
+                        pid = None
+                row = {"user_id": uid, "email": email, "kind": kind,
+                       "parent_id": pid, "content": content, "contact": contact,
+                       "device": _device_id(), "ver": APP_VER}
+                ok, r = _cb_request("POST", "/v1/rdb/rest/feedback", row,
+                                    token=ACCOUNT.access_token if ACCOUNT.user else None)
+                self._json({"ok": ok, "error": None if ok else (r.get("error") or "提交失败")})
+            elif p.path == "/api/feedback/list":
+                self._fb_list(qs)
+            elif p.path == "/api/feedback/set":
+                # 管理员审核操作：{id, status?, admin_note?, deleted?}
+                if not (ACCOUNT.user and
+                        ACCOUNT.user.get("email") == FEEDBACK_ADMIN_EMAIL):
+                    self._json({"ok": False, "error": "仅管理员可操作"})
+                    return
+                fid = str(body.get("id") or "").strip()
+                if not fid:
+                    self._json({"ok": False, "error": "缺少 id"})
+                    return
+                patch = {k: body[k] for k in ("status", "admin_note", "deleted") if k in body}
+                if not patch:
+                    self._json({"ok": False, "error": "无变更字段"})
+                    return
+                ok, r = _cb_request("PATCH", "/v1/rdb/rest/feedback?id=eq.%s"
+                                    % urllib.parse.quote(fid), patch,
+                                    token=ACCOUNT.access_token,
+                                    extra={"Prefer": "return=minimal"})
+                self._json({"ok": ok, "error": None if ok else (r.get("error") or "操作失败")})
             elif p.path == "/api/fav":
                 fav = CFG.fav_toggle(body.get("item") or {}, body.get("action"))
                 self._json({"ok": True, "favorites": fav})
@@ -3000,6 +6156,62 @@ def focus_existing_window():
     return False
 
 
+def _port_in_use(port):
+    s = socket.socket()
+    try:
+        s.bind(("127.0.0.1", port))
+        return False
+    except OSError:
+        return True
+    finally:
+        try:
+            s.close()
+        except Exception:
+            pass
+
+
+def _kill_stale_instance():
+    """V7.3/M5.6：运行中的是「旧版本」实例 → 自动关闭它（同版本返回 False，交给唤醒逻辑）。
+    顺序：礼貌调用旧实例 /api/quit → 等端口释放 → 兜底按端口找 PID 强杀。"""
+    try:
+        with _LOCAL_OPENER.open(
+                "http://127.0.0.1:%d/api/ping" % SINGLE_PORT, timeout=4) as r:
+            j = json.loads(r.read().decode("utf-8", "ignore"))
+        if str(j.get("ver") or "") == APP_VER:
+            return False   # 同版本：不关，走正常「唤醒窗口」
+    except Exception:
+        return False       # ping 不通（可能不是本程序占用）：不乱杀
+    try:
+        req = urllib.request.Request(
+            "http://127.0.0.1:%d/api/quit" % SINGLE_PORT, data=b"{}", method="POST")
+        _LOCAL_OPENER.open(req, timeout=4)
+    except Exception:
+        pass
+    for _ in range(20):            # 最多等 10 秒
+        time.sleep(0.5)
+        if not _port_in_use(SINGLE_PORT):
+            return True
+    try:                            # 兜底：netstat 找监听 PID 强杀
+        import subprocess
+        out = subprocess.check_output(["netstat", "-ano"], timeout=10).decode("gbk", "ignore")
+        pids = set()
+        for ln in out.splitlines():
+            if (":%d " % SINGLE_PORT) in ln and "LISTENING" in ln:
+                p = ln.rsplit(None, 1)[-1]
+                if p.isdigit():
+                    pids.add(p)
+        for p in pids:
+            subprocess.check_call(["taskkill", "/F", "/PID", p],
+                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
+    for _ in range(10):
+        time.sleep(0.5)
+        if not _port_in_use(SINGLE_PORT):
+            return True
+    return False
+
+
 def acquire_port():
     """端口分配 + 单实例守卫：
     1. 环境变量指定端口 → 直接用（云端/调试场景）
@@ -3010,21 +6222,24 @@ def acquire_port():
     env = os.environ.get("REBANG_PORT") or os.environ.get("PORT")
     if env:
         return int(env)
-    # 互斥体守卫（最先做，杜绝任何竞态窗口）：已有实例 → 唤起其窗口后退出
+    # 互斥体守卫：旧版本实例 → 自动关闭后本次接管；同版本 → 唤醒窗口后退出
     if _mutex_held():
         info = _probe_instance(SINGLE_PORT)
-        shown = False
-        if info:
-            try:
-                _LOCAL_OPENER.open(
-                    "http://127.0.0.1:%d/api/show" % SINGLE_PORT, timeout=4)
-                shown = True
-            except Exception:
-                pass
-        if not shown:
-            shown = focus_existing_window()
-        log("单实例守卫：已有实例在运行，本次启动退出（shown=%s）" % shown)
-        sys.exit(0)
+        if info and _kill_stale_instance():
+            log("检测到旧版本实例，已自动关闭，本次启动接管")
+        else:
+            shown = False
+            if info:
+                try:
+                    _LOCAL_OPENER.open(
+                        "http://127.0.0.1:%d/api/show" % SINGLE_PORT, timeout=4)
+                    shown = True
+                except Exception:
+                    pass
+            if not shown:
+                shown = focus_existing_window()
+            log("单实例守卫：已有实例在运行，本次启动退出（shown=%s）" % shown)
+            sys.exit(0)
     s = socket.socket()
     try:
         s.bind(("127.0.0.1", SINGLE_PORT))
@@ -3038,6 +6253,20 @@ def acquire_port():
             pass
     # 绑定失败：看端口上是不是已经在跑热榜助手
     if _probe_instance(SINGLE_PORT):
+        if _kill_stale_instance():
+            log("检测到旧版本实例，已自动关闭，重试固定端口")
+            s2 = socket.socket()
+            try:
+                s2.bind(("127.0.0.1", SINGLE_PORT))
+                return SINGLE_PORT   # 旧实例已让位，本次成为首个实例
+            except OSError:
+                pass
+            finally:
+                try:
+                    s2.close()
+                except Exception:
+                    pass
+            return free_port()
         try:
             _LOCAL_OPENER.open(
                 "http://127.0.0.1:%d/api/show" % SINGLE_PORT, timeout=4)
@@ -3048,27 +6277,71 @@ def acquire_port():
     return free_port()
 
 
+def _edge_chrome_paths():
+    """V8.0.2：Edge / Chrome 可执行文件位置（常见目录 + 注册表 App Paths 兜底）"""
+    cands = [
+        os.path.expandvars(r"%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe"),
+        os.path.expandvars(r"%ProgramFiles%\Microsoft\Edge\Application\msedge.exe"),
+        os.path.expandvars(r"%LocalAppData%\Microsoft\Edge\Application\msedge.exe"),
+        os.path.expandvars(r"%ProgramFiles%\Google\Chrome\Application\chrome.exe"),
+        os.path.expandvars(r"%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe"),
+        os.path.expandvars(r"%LocalAppData%\Google\Chrome\Application\chrome.exe"),
+    ]
+    try:
+        import winreg
+        for key in (r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\msedge.exe",
+                    r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\chrome.exe",
+                    r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\App Paths\msedge.exe"):
+            for root in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):
+                try:
+                    with winreg.OpenKey(root, key) as k:
+                        p = winreg.QueryValue(k, None)
+                        if p:
+                            cands.append(p)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    out = []
+    for c in cands:
+        if c and os.path.exists(c) and c not in out:
+            out.append(c)
+    return out
+
+
 def open_window(url):
+    """V8.0.2：默认「独立窗口」——用 Edge/Chrome 的 --app 模式开无地址栏窗口。
+    以前偶尔会退回默认浏览器（普通标签页），现在改为：
+      ① 专用用户目录 + --app，保证永远是新窗口而不是并到已有浏览器里；
+      ② 找不到浏览器时依次换 Chrome、再换默认浏览器，并写日志。"""
     if os.environ.get("REBANG_NO_BROWSER"):
         return True
     mode = CFG.settings.get("openMode", "app")
-    if mode == "app":
-        cands = [
-            os.path.expandvars(r"%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe"),
-            os.path.expandvars(r"%ProgramFiles%\Microsoft\Edge\Application\msedge.exe"),
-            os.path.expandvars(r"%LocalAppData%\Microsoft\Edge\Application\msedge.exe"),
-            os.path.expandvars(r"%ProgramFiles%\Google\Chrome\Application\chrome.exe"),
-            os.path.expandvars(r"%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe"),
-        ]
-        for exe in cands:
-            if exe and os.path.exists(exe):
-                try:
-                    import subprocess
-                    subprocess.Popen([exe, "--app=" + url, "--window-size=1320,880",
-                                      "--disable-features=Translate"], close_fds=True)
-                    return True
-                except Exception as e:
-                    log("启动浏览器失败: %r" % (e,))
+    if mode != "app":
+        try:
+            import webbrowser
+            webbrowser.open(url)
+            return True
+        except Exception:
+            return False
+    prof = os.path.join(data_dir(), "独立窗口")
+    try:
+        os.makedirs(prof, exist_ok=True)
+    except Exception:
+        prof = ""
+    flags = ["--app=" + url, "--window-size=1320,880",
+             "--no-first-run", "--no-default-browser-check",
+             "--disable-features=Translate,msEdgeSidebarV2,msFeedScreenshot"]
+    if prof:
+        flags.insert(1, "--user-data-dir=" + prof)
+    for exe in _edge_chrome_paths():
+        for extra in (flags, [f for f in flags if not f.startswith("--user-data-dir")]):
+            try:
+                subprocess.Popen([exe] + extra, close_fds=True)
+                return True
+            except Exception as e:
+                log("启动独立窗口失败(%s): %r" % (os.path.basename(exe), e))
+    log("没找到 Edge/Chrome，退回默认浏览器")
     try:
         import webbrowser
         webbrowser.open(url)
@@ -3159,6 +6432,7 @@ def main():
     log("启动 %s v%s @ %s" % (APP_NAME, APP_VER, url))
     threading.Thread(target=lambda: refresh_many([s for s in CFG.sources if s["enabled"]]),
                      daemon=True).start()
+    threading.Thread(target=_periodic_refresh, daemon=True).start()
     WATCH.start()
     start_tray(url)
     if not os.environ.get("REBANG_NO_BROWSER"):

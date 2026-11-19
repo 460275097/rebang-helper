@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>热榜助手 V6.0</title>
+<title>热榜助手 V8.0.2</title>
 <style>
 :root{
   --bg:#f2f3f5; --panel:#ffffff; --panel2:#fafbfc; --text:#14171c; --sub:#6d7683;
@@ -70,11 +70,36 @@ svg{display:block}
 .src-item.active .nm{color:var(--blue);font-weight:600}
 .src-item.drag{opacity:.4}
 .src-item.over{box-shadow:inset 0 2px 0 var(--blue)}
+/* V7.1/M5.4：拖动源时列表下方的「隐藏/删除」投放区 */
+.src-dropzone{display:none;gap:6px;margin-top:8px;justify-content:space-between}
+.src-dropzone .dz-btn{flex:0 0 46%;text-align:center;font-size:11.5px;font-weight:600;border-radius:8px;
+  padding:8px 4px;border:1.5px dashed;user-select:none;background:var(--panel2)}
+.src-dropzone .dz-hide{color:#d97706;border-color:#d97706}
+.src-dropzone .dz-del{color:#dc2626;border-color:#dc2626}
+.src-dropzone .dz-btn.over{border-style:solid;outline:2px solid currentColor;outline-offset:1px}
 .src-item .dot{width:6px;height:6px;border-radius:50%;flex:none;background:var(--line)}
 .src-item.ok .dot{background:#12b76a}
 .src-item.err .dot{background:#f04438}
+/* V7.9.5：圆点可点（用浏览器打开该源官网），扩大热区但不改视觉大小 */
+.src-item .dot{position:relative;cursor:pointer;transition:box-shadow .15s,transform .15s}
+.src-item .dot::after{content:"";position:absolute;inset:-8px;border-radius:50%}
+.src-item .dot:hover{transform:scale(1.25);box-shadow:0 0 0 3px color-mix(in srgb,currentColor 18%,transparent)}
+.src-item.ok .dot:hover{box-shadow:0 0 0 3px rgba(18,183,106,.22)}
+.src-item.err .dot:hover{box-shadow:0 0 0 3px rgba(240,68,56,.22)}
 .src-item .nm{font-size:13.5px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .src-item .cnt{font-size:11px;color:var(--sub);font-variant-numeric:tabular-nums}
+/* V7.9.1：侧栏源行「上移/下移」按钮（悬停显示，鼠标/触屏都可点，不依赖拖拽） */
+.src-item .mv{display:none;flex:none;gap:2px;align-items:center}
+.src-item:hover .mv,.src-item.moving .mv{display:flex}
+.src-item .mv button{width:17px;height:17px;padding:0;border-radius:4px;border:1px solid var(--line);
+  background:var(--panel);color:var(--sub);font-size:9px;line-height:1;cursor:pointer;display:grid;place-items:center}
+.src-item .mv button:hover{color:#fff;background:var(--blue);border-color:var(--blue)}
+.src-item .mv button:disabled{opacity:.3;cursor:default;background:var(--panel);color:var(--sub);border-color:var(--line)}
+/* V7.9.1：分类页签选中时出现的 ‹ › 排序按钮（单击即生效） */
+#catRow button .cmv{display:inline-grid;place-items:center;width:15px;height:15px;margin-left:3px;border-radius:4px;
+  font-style:normal;font-size:11px;line-height:1;background:color-mix(in srgb,var(--blue) 16%,transparent);
+  color:var(--blue);vertical-align:middle}
+#catRow button .cmv:hover{background:var(--blue);color:#fff}
 .src-item .sw{width:31px;height:18px;border-radius:20px;background:var(--line);position:relative;flex:none;transition:.18s}
 .src-item .sw::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;
   background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:.18s}
@@ -150,13 +175,18 @@ svg{display:block}
 .rows{background:color-mix(in srgb,var(--panel) var(--panelMix,100%),transparent);border:1px solid var(--line);
   border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow)}
 .row{display:flex;align-items:center;gap:10px;padding:9px 13px;border-bottom:1px solid var(--line2);
-  cursor:pointer;transition:background .12s;position:relative}
+  cursor:pointer;transition:background .12s;position:relative;
+  content-visibility:auto;contain-intrinsic-size:auto 44px}
 .row:last-child{border-bottom:0}
 .row:hover{background:var(--panel2)}
 .row.speaking{background:color-mix(in srgb,var(--blue) 9%,transparent)}
 .row .tt{flex:1;min-width:0;font-size:calc(var(--fs)*.933);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .row:hover .tt{color:var(--blue)}
 .row .ex{font-size:calc(var(--fs)*.767);color:var(--sub);max-width:28%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:none}
+/* V6.7：GitHub 条目标题后的中文简介（悬停 title 亦显示） */
+.ghzh{color:var(--sub);font-size:.82em;font-weight:400;margin-left:2px}
+/* V6.9：中英双显模式的译文小字 */
+.cntr{color:var(--blue);font-size:.8em;font-weight:400;margin-left:6px}
 .row .heat{flex:none;min-width:58px;text-align:right;font-size:calc(var(--fs)*.8)}
 .row .acts{position:static;opacity:0;transform:none;flex:none}
 .row:hover .acts{opacity:1}
@@ -172,10 +202,25 @@ svg{display:block}
 .cat-row button em{font-style:normal;opacity:.6;font-size:10.5px;margin-left:2px}
 
 /* ---- 看板视图：多列源面板（参考 rebang.today 看板） ---- */
-.bgrid{display:grid;grid-template-columns:repeat(auto-fill,340px);gap:25px;align-items:stretch;justify-content:flex-start;overflow-x:auto;padding-bottom:6px}
-.bcard{background:color-mix(in srgb,var(--panel) var(--panelMix,100%),transparent);border:1px solid var(--line);
-  border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);
-  height:480px;display:flex;flex-direction:column}
+/* V7.9.7：看板列数/行数可设（一行 4~12 个、一屏 2~6 个），卡片宽高可拖边缘调节 */
+.bgrid{display:grid;gap:18px;align-items:stretch;justify-content:flex-start;padding-bottom:6px;overflow-x:auto;
+  grid-template-columns:repeat(var(--bcols,4),minmax(0,1fr))}
+.bcard{position:relative;background:color-mix(in srgb,var(--panel) var(--panelMix,100%),transparent);
+  border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);
+  height:var(--bcardh,480px);display:flex;flex-direction:column;
+  /* V8.0.0 流畅度：视口外的看板卡片跳过排版/绘制，100+ 源同屏也不卡 */
+  content-visibility:auto;contain-intrinsic-size:auto var(--bcardh,480px)}
+/* 拖拽热区：右侧改宽度、底部改高度；动一个，所有板块同步（网格统一尺寸） */
+.brz{position:absolute;z-index:4;opacity:0;transition:background .15s,opacity .15s;touch-action:none}
+.bcard:hover .brz{opacity:1}
+.brz-r{top:0;right:0;width:9px;height:100%;cursor:ew-resize}
+.brz-b{left:0;bottom:0;height:9px;width:100%;cursor:ns-resize}
+.brz-r:hover,.brz-b:hover{background:color-mix(in srgb,var(--blue) 30%,transparent)}
+body.rb-resizing{cursor:ew-resize;user-select:none}
+body.rb-resizing.col-resize{cursor:ew-resize}
+body.rb-resizing.row-resize{cursor:ns-resize}
+body.rb-resizing *{user-select:none !important}
+.bgrid-tip{grid-column:1/-1;font-size:11.5px;color:var(--sub);padding:0 2px 2px}
 .bhead{flex:none;display:flex;align-items:center;gap:7px;padding:9px 12px;
   border-bottom:1px solid var(--line2);cursor:pointer;background:transparent}
 .bhead:hover{background:var(--panel2)}
@@ -201,6 +246,14 @@ svg{display:block}
 .bitem .rk.t2{background:var(--accent2);color:#fff}
 .bitem .rk.t3{background:#ffa940;color:#fff}
 .bitem .bt{flex:1;min-width:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-all}
+.bitem .bt.hast{-webkit-line-clamp:3}
+/* V7.8.5：英文标题下方浅灰中文翻译行（小一号字，不抢视觉重心，不挤摘要/热度/来源） */
+.zh-tr{display:block;font-size:calc(var(--fs)*.767);color:var(--sub);font-weight:400;line-height:1.45;
+  margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.list-mode .zh-tr,.card .zh-tr,.hcard .zh-tr{white-space:normal;text-overflow:clip;word-break:break-all}
+.tr-tag{opacity:.72;font-weight:400}
+.card h3 .zh-tr{font-size:12px}
+.hcard h3 .zh-tr{font-size:12px}
 .bitem .bh{flex:none;font-size:calc(var(--fs)*.733);color:var(--sub);margin-top:3px;max-width:74px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* ---- 列表视图：两行标题、完整显示 ---- */
@@ -237,7 +290,60 @@ svg{display:block}
   border:1px solid color-mix(in srgb,#f04438 26%,var(--line));color:#b42318;border-radius:10px;
   padding:9px 13px;font-size:12.5px;margin-bottom:12px}
 html[data-theme="dark"] .err-bar{color:#ffb4ab}
-.err-bar button{margin-left:auto;color:inherit;font-weight:600;font-size:12px;text-decoration:underline}
+.err-bar button{margin-left:0;color:inherit;font-weight:600;font-size:12px;text-decoration:underline;background:none;border:0;padding:0;cursor:pointer}
+.err-bar .eb-btns{margin-left:auto;display:flex;align-items:center;gap:10px;flex:none}
+.err-bar .eb-more{margin-left:0}
+/* M8.0：通知条尾部关闭图标 */
+.err-bar .eb-x{margin-left:0;text-decoration:none;border:1px solid color-mix(in srgb,#f04438 30%,var(--line));
+  border-radius:7px;padding:1px 7px;font-size:12px;line-height:1.5}
+.err-bar .eb-x:hover{background:color-mix(in srgb,#f04438 14%,var(--panel))}
+/* V7.8：失败源完整清单展开面板 */
+.err-list{background:color-mix(in srgb,#f04438 5%,var(--panel));border:1px solid color-mix(in srgb,#f04438 22%,var(--line));
+  border-top:0;border-radius:0 0 10px 10px;padding:4px 13px;margin:-6px 0 12px;max-height:320px;overflow:auto}
+.err-list .er{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px dashed var(--line);font-size:12.5px}
+.err-list .er:last-child{border-bottom:0}
+/* ---------- V7.9.3：推广 · 推荐页 ---------- */
+.adwrap{max-width:760px;margin:0 auto;padding:2px 0 20px}
+.ad-hero{background:linear-gradient(135deg,color-mix(in srgb,#ff7a45 16%,var(--panel)),color-mix(in srgb,#ff4d6d 12%,var(--panel)));
+  border:1px solid var(--line);border-radius:var(--radius);padding:18px 18px 16px;margin-bottom:12px;box-shadow:var(--shadow)}
+.ad-hero-t{font-size:17px;font-weight:800;letter-spacing:.3px;line-height:1.5;color:var(--text)}
+.ad-hero-s{font-size:12.5px;color:var(--sub);margin-top:6px;line-height:1.7}
+.ad-tag{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.5px;color:#fff;
+  background:linear-gradient(135deg,#ff5f6d,#ff8a3d);padding:2px 7px;border-radius:6px;flex:none}
+.ad-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px;
+  box-shadow:var(--shadow);cursor:pointer;transition:.16s}
+.ad-card:hover{box-shadow:var(--shadow-h);transform:translateY(-1px)}
+.ad-card-hd{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.ad-card-badge{font-size:11px;color:var(--sub);border:1px solid var(--line);border-radius:6px;padding:1px 6px}
+.ad-card-t{font-size:15.5px;font-weight:700;line-height:1.55}
+.ad-card-d{font-size:13px;color:var(--sub);line-height:1.7;margin-top:6px}
+.ad-card-go{margin-top:12px;display:inline-block;font-size:13px;font-weight:700;color:#fff;border-radius:9px;
+  padding:7px 14px;background:linear-gradient(135deg,#ff6a4d,#ff9147)}
+.ad-banner{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);
+  border-radius:12px;padding:12px 14px;box-shadow:var(--shadow);cursor:pointer;flex-wrap:wrap}
+.ad-bn-t{font-size:14px;font-weight:700}
+.ad-bn-d{font-size:12.5px;color:var(--sub);flex:1 1 180px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ad-bn-go{font-size:12.5px;font-weight:700;color:var(--accent);flex:none}
+.ad-row{cursor:pointer}
+.ad-row .rn{display:block;font-size:12px;color:var(--sub);margin-top:3px;font-weight:400}
+.ad-row .rb-go{font-size:12.5px;font-weight:700;color:var(--accent);flex:none}
+.ad-foot{margin-top:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--sub)}
+.ad-qv{cursor:pointer;font-weight:700;color:var(--text);border:1px dashed var(--line);border-radius:8px;padding:4px 9px}
+.ad-qv:hover{background:var(--panel2)}
+.ad-tip{opacity:.85}
+.err-list .en{font-weight:600;color:var(--text);flex:none;max-width:38%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.err-list .em{color:var(--sub);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+.err-list .er button{flex:none;margin-left:0;color:var(--sub);font-weight:500;font-size:11.5px;padding:1px 8px;
+  border:1px solid var(--line);border-radius:6px;text-decoration:none}
+/* V7.8：分类管理 ↑↓ 排序按钮 */
+.cmi .cup,.cmi .cdn{border:none;background:none;color:var(--sub);cursor:pointer;font-size:11px;padding:0}
+/* V7.9：指针拖拽排序（鼠标直接拖 / 触屏长按拖） */
+body.ptr-sorting, body.ptr-sorting *{cursor:grabbing!important;user-select:none!important}
+.ptr-ghost{position:fixed;z-index:99999;pointer-events:none;opacity:.9;box-shadow:0 10px 28px -8px rgba(16,24,40,.45);
+  border-radius:8px;background:var(--panel);overflow:hidden}
+.ptr-drag{opacity:.35}
+.ptr-over{outline:2px dashed var(--blue);outline-offset:-2px;border-radius:8px}
+.src-item,.srcrow,#catRow button[data-c]{touch-action:pan-y}
 .skeleton{height:96px;border-radius:12px;background:linear-gradient(90deg,var(--panel2) 25%,var(--line2) 37%,var(--panel2) 63%);
   background-size:400% 100%;animation:sk 1.3s ease infinite}
 @keyframes sk{0%{background-position:100% 50%}100%{background-position:0 50%}}
@@ -260,20 +366,47 @@ html[data-theme="dark"] .err-bar{color:#ffb4ab}
   display:none;align-items:center;justify-content:center;padding:26px}
 .mask.on{display:flex}
 .modal{background:var(--panel);border:1px solid var(--line);border-radius:16px;width:min(820px,100%);
-  max-height:90vh;display:flex;flex-direction:column;box-shadow:0 30px 80px -30px rgba(0,0,0,.5);overflow:hidden;animation:pop .18s ease}
+  max-height:calc(100vh - 52px);display:flex;flex-direction:column;
+  box-shadow:0 30px 80px -30px rgba(0,0,0,.5);overflow:hidden;animation:pop .18s ease}
 @keyframes pop{from{transform:translateY(8px);opacity:0}}
-.modal-h{display:flex;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line);gap:10px}
+/* V8.0.2：标题与分类页签固定常显（内容再多也不会把「常规/外观/新闻源…」顶出视野） */
+.modal-h{display:flex;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line);gap:10px;
+  flex:0 0 auto;position:relative;z-index:3;background:var(--panel)}
 .modal-h h2{margin:0;font-size:15.5px}
 .modal-h .x{margin-left:auto;width:28px;height:28px;border-radius:7px;display:grid;place-items:center;color:var(--sub)}
 .modal-h .x:hover{background:var(--panel2);color:var(--text)}
-.tabs{display:flex;gap:4px;padding:9px 18px 0;border-bottom:1px solid var(--line)}
-.tabs button{padding:8px 13px;font-size:13px;color:var(--sub);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs{display:flex;gap:4px;padding:9px 18px 0;border-bottom:1px solid var(--line);overflow-x:auto;
+  scrollbar-width:none;-webkit-overflow-scrolling:touch;flex:0 0 auto;position:sticky;top:0;z-index:2;
+  background:var(--panel)}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{padding:8px 13px;font-size:13px;color:var(--sub);border-bottom:2px solid transparent;margin-bottom:-1px;flex:none;white-space:nowrap}
 .tabs button.on{color:var(--blue);border-bottom-color:var(--blue);font-weight:600}
-.modal-b{padding:16px 18px;overflow-y:auto;min-height:260px}
+.modal-b{padding:16px 18px;overflow-y:auto;flex:1 1 auto;min-height:0;overscroll-behavior:contain}
+/* V8.0.2：源分类多选（按钮 + 浮层勾选） */
+.catsel{flex:none;font-size:11px;padding:2px 7px;border-radius:6px;cursor:pointer;max-width:132px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:inherit;
+  background:color-mix(in srgb,var(--blue) 11%,transparent);color:var(--blue);border:1px solid transparent}
+.catsel:hover{border-color:color-mix(in srgb,var(--blue) 40%,transparent)}
+.catpick-pop{position:fixed;z-index:200;background:var(--panel);border:1px solid var(--line);border-radius:11px;
+  box-shadow:0 18px 44px -18px rgba(0,0,0,.45);padding:8px;width:250px}
+.catpick-pop .cph{font-size:11.5px;color:var(--sub);padding:2px 4px 6px;line-height:1.5}
+.catpick-pop .cpb{max-height:244px;overflow-y:auto;display:flex;flex-direction:column;gap:1px}
+.catpick-pop label{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--text);
+  padding:4px 6px;border-radius:6px;cursor:pointer}
+.catpick-pop label:hover{background:var(--panel2)}
+.catpick-pop .cpf{display:flex;justify-content:flex-end;gap:6px;padding-top:6px;margin-top:4px;border-top:1px dashed var(--line2)}
 .field{display:flex;align-items:center;gap:14px;padding:11px 0;border-bottom:1px dashed var(--line2)}
 .field:last-child{border-bottom:0}
-.field .lb{width:118px;flex:none;font-size:13.5px;font-weight:500}
-.field .hint{font-size:11.5px;color:var(--sub);margin-top:3px;font-weight:400;line-height:1.5}
+.field .lb{width:118px;flex:none;font-size:13.5px;font-weight:500;position:relative}
+.field .hint{font-size:11.5px;color:var(--sub);margin-top:3px;font-weight:400;line-height:1.5;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:help}
+/* V7.9.6：说明文字平时只留一行（省略号），鼠标移上去在下方浮层里显示全文；触屏点一下也展开 */
+@media (hover:hover){
+  .field .hint:hover{white-space:normal;overflow:visible;position:absolute;left:0;top:100%;width:250px;
+    z-index:40;background:var(--panel,#fff);color:var(--text,#222);border:1px solid var(--line);
+    border-radius:8px;padding:7px 9px;box-shadow:0 8px 22px rgba(0,0,0,.16);text-align:left}
+}
+.field .hint.on{white-space:normal;overflow:visible}
 .field .ctl{margin-left:auto;display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
 .pill{padding:6px 12px;border:1px solid var(--line);border-radius:8px;font-size:12.5px;background:var(--panel2);color:var(--sub);transition:.15s}
 .pill:hover{border-color:color-mix(in srgb,var(--blue) 40%,var(--line))}
@@ -296,6 +429,9 @@ html[data-theme="dark"] .err-bar{color:#ffb4ab}
 .srcrow .ops{display:flex;gap:2px}
 .srcrow .ops button{width:24px;height:24px;border-radius:6px;display:grid;place-items:center;color:var(--sub);font-size:11.5px}
 .srcrow .ops button:hover{background:var(--panel);color:var(--text)}
+/* V6.2 拖拽换分组高亮 + 分类管理块 */
+.dropok{outline:2px solid var(--blue)!important;outline-offset:1px;opacity:.85}
+.srcrow[draggable="true"]:active{opacity:.6}
 .tip{font-size:12px;line-height:1.7;color:var(--sub);background:var(--panel2);border:1px solid var(--line);
   border-radius:9px;padding:10px 12px;margin-bottom:12px}
 .tip b{color:var(--blue)}
@@ -321,20 +457,64 @@ html[data-theme="dark"] .err-bar{color:#ffb4ab}
   .search{width:130px}.search:focus-within{width:160px}
   .tb-title{max-width:40%}
 }
+
+/* ============ M8.2：手机 UA（Android / iPhone）自动套用 APK 版排版 ============ */
+body.rb-m .app{height:100vh;height:100dvh;grid-template-columns:1fr}
+body.rb-m .topbar{gap:6px;padding:8px 10px;position:relative}
+body.rb-m .tb-title{font-size:15px;max-width:none;flex:1 1 auto;min-width:0}
+body.rb-m .tb-title .n{display:none}
+body.rb-m .spacer{display:none}
+body.rb-m #rbMenu{flex:none}
+/* 搜索：默认只有一个图标，点开才展开成输入框 */
+body.rb-m .search{width:34px;height:34px;min-width:34px;padding:0;justify-content:center;flex:none;cursor:pointer}
+body.rb-m .search input{display:none;width:0;padding:0}
+body.rb-m .search.rbOpen{position:absolute;left:8px;right:8px;top:6px;width:auto;min-width:0;height:40px;
+  padding:0 10px;justify-content:flex-start;z-index:90;background:var(--panel);box-shadow:0 8px 24px -10px rgba(16,24,40,.4)}
+body.rb-m .search.rbOpen input{display:block;width:100%;font-size:16px}
+/* 视图切换：只留图标 */
+body.rb-m .seg{padding:2px;flex:none}
+body.rb-m .seg button{padding:0;width:32px;height:30px;display:grid;place-items:center;font-size:0}
+body.rb-m .seg button svg{width:16px;height:16px;display:block}
+body.rb-m #btnFit,body.rb-m #btnFb{display:none!important}
+body.rb-m .content{padding:10px 10px 84px;overflow-x:hidden}
+/* 右下悬浮竖排：朗读 / 刷新 / 翻译 / 设置（与 APK 端一致） */
+body.rb-m #rbRail{position:fixed;right:9px;bottom:calc(16px + env(safe-area-inset-bottom,0px));
+  display:flex;flex-direction:column;gap:8px;z-index:57}
+body.rb-m #rbRail .ri{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;
+  color:var(--sub);background:color-mix(in srgb,var(--panel) 92%,transparent);border:1px solid var(--line);
+  box-shadow:0 6px 18px -8px rgba(16,24,40,.5);backdrop-filter:blur(10px);position:relative}
+body.rb-m #rbRail .ri:active{transform:scale(.94)}
+body.rb-m #rbRail .ri svg{width:17px;height:17px}
+body.rb-m #rbRail .ri.on{color:#fff;background:linear-gradient(135deg,#3b6ef6,#69a6ff);border-color:transparent}
+body.rbSide #rbRail{display:none!important}
+/* 看板/列表：手机上一律单列、卡片自然展开（与 APK 端一致） */
+body.rb-m .bgrid{grid-template-columns:1fr!important;gap:9px!important;justify-content:stretch!important;
+  overflow:visible!important;padding:0!important;width:100%}
+body.rb-m .bcard{height:auto!important;min-height:0!important;width:100%;border-radius:12px}
+body.rb-m .bcard .bbody{max-height:none!important;overflow:visible!important}
+body.rb-m .bhead{padding:7px 10px!important}
+body.rb-m .bitem{padding:6px 10px!important;gap:6px!important}
+body.rb-m .bitem .bh{display:none!important}
+body.rb-m .bfoot{padding:6px 10px!important}
+body.rb-m .grid{grid-template-columns:1fr!important;gap:8px!important}
+body.rb-m .rows{padding:0!important}
+body.rb-m .row{padding:8px 10px!important;gap:8px!important}
+body.rb-m .row .tt{font-size:13.5px!important;line-height:1.4!important}
+body.rb-m .row .heat{display:none!important}
+/* 抽屉遮罩 */
+#rbSideMask{position:fixed;inset:0;z-index:59;display:none;background:rgba(10,14,20,.42)}
+body.rbSide #rbSideMask{display:block}
+body.rb-m .sidebar{box-shadow:0 0 40px rgba(0,0,0,.3)}
 </style>
 </head>
 <body>
 <div class="app">
   <aside class="sidebar" id="sidebar">
     <div class="brand">
-      <div class="mark">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
-          <circle cx="10.5" cy="10.5" r="6.2"/><path d="m15.2 15.2 4.4 4.4"/>
-        </svg>
-      </div>
       <div>
-        <h1>热榜助手<span class="ver">V6.0</span></h1>
+        <h1>热榜助手<span class="ver">V8.0.0</span></h1>
         <div class="by">作者：七度</div>
+        <div class="by" style="font-size:11px;opacity:.72;line-height:1.5;margin-top:2px">愿你的信息流清爽一点，别再被推荐算法牵着走。</div>
       </div>
     </div>
 
@@ -368,14 +548,19 @@ html[data-theme="dark"] .err-bar{color:#ffb4ab}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
         <input id="q" placeholder="关键词筛选 / 回车搜索">
       </div>
-      <div class="seg" id="segLayout"><button data-v="board" title="总览看板：每个源一个面板，多列排布">▦ 总览看板</button><button data-v="list" title="列表视图：一行一条">☰ 列表</button></div>
-      <button class="ib" id="btnTts" title="朗读本页标题 (R)">
+      <div class="seg" id="segLayout"><button data-v="board" title="总览看板：每个源一个面板，多列并排展示">▦ 总览看板</button><button data-v="list" title="列表视图：所有新闻合并成一行一条的榜单">☰ 列表</button></div>
+      <button class="ib" id="btnFit" title="自适应铺满：按窗口宽度重新计算看板列数和卡片高度，一键铺满屏幕">⤢</button>
+      <button class="ib" id="btnTts" title="朗读：用语音读出当前列表的新闻标题，快捷键 R">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9.5h3.2L12 5.5v13l-4.8-4H4z"/><path d="M16 8.6a5 5 0 0 1 0 6.8"/><path d="M18.6 6a8.6 8.6 0 0 1 0 12"/></svg>
       </button>
-      <button class="ib" id="btnRefresh" title="刷新 (F5)">
+      <button class="ib" id="btnRefresh" title="刷新：重新抓取当前显示分类下所有源的新闻，快捷键 F5">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>
       </button>
-      <button class="ib" id="btnSet2" title="设置">
+      <button class="ib" id="btnTr" title="翻译：把当前列表的标题翻译成中文（支持在线/离线模型）">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h7"/><path d="M7.5 3v2c0 3.6-1.7 6.6-4.5 8.4"/><path d="M5 8.5c1.3 2.6 3.6 4.6 6 5.5"/><path d="m13 21 4-9 4 9"/><path d="M14.2 18h5.6"/></svg>
+      </button>
+      <button class="ib" id="btnFb" title="反馈：向作者提建议或报告问题" style="width:auto;padding:0 11px;font-size:12.5px;font-weight:700">反馈</button>
+      <button class="ib" id="btnSet2" title="设置：源管理、分类、看板列数行数、主题、翻译、关于与下载">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 7 19.4a1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.2-2.9H1a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 2.6 7a1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H7a1.7 1.7 0 0 0 1-1.5V1a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V7a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
       </button>
     </div>
@@ -398,6 +583,10 @@ html[data-theme="dark"] .err-bar{color:#ffb4ab}
       <button data-t="general" class="on">常规</button>
       <button data-t="look">外观</button>
       <button data-t="sources">新闻源</button>
+      <button data-t="cert">证书</button>
+      <button data-t="account">账号</button>
+      <button data-t="guide">使用指导</button>
+      <button data-t="feedback">建议</button>
       <button data-t="about">关于</button>
     </div>
     <div class="modal-b" id="mBody"></div>
@@ -409,10 +598,43 @@ html[data-theme="dark"] .err-bar{color:#ffb4ab}
   <div style="color:#eee;font-size:13px;text-align:center;line-height:1.9">长按二维码可保存到手机 / 识别打赏<br><span style="opacity:.65">点空白处关闭</span></div>
 </div>
 
+<script src="/sdk.global.js"></script>
 <script>
 const $ = s => document.querySelector(s);
 const esc = s => String(s==null?'':s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const el = (t,c,h) => { const n=document.createElement(t); if(c)n.className=c; if(h!=null)n.innerHTML=h; return n; };
+
+/* V6.7：云服务 SDK（建议反馈上云；加载失败只影响建议功能，主功能不受影响） */
+let CLOUD=null, CLOUD_ERR='';
+const CLOUD_CFG={
+  endpoint: 'https://hotboard-mobile.app.workbuddy.host',
+  oauthRelayBaseUrl: 'https://www.workbuddy.cn/v2/as/genie-baas/oauth',
+  publishableKey: 'wbpk_2WYvs4efiBXDiTR7alG7vD_oigh5tWGHt21QUbb2z8dG3O55h4fkOul',
+};
+try{
+  if(window.WorkBuddyCloud) CLOUD = WorkBuddyCloud.createWorkBuddyCloud(CLOUD_CFG);
+}catch(e){ CLOUD_ERR=(e&&e.message)||String(e); console.warn('cloud init failed', e); }
+/* V7.2/M5.5：云端自愈——个别会话初始化失败后，打开建议面板时再试一次，并显示真实原因 */
+function ensureCloud(){
+  if(CLOUD) return true;
+  try{
+    if(window.WorkBuddyCloud&&window.WorkBuddyCloud.createWorkBuddyCloud){
+      CLOUD=WorkBuddyCloud.createWorkBuddyCloud(CLOUD_CFG); CLOUD_ERR='';
+    }
+  }catch(e){ CLOUD_ERR=(e&&e.message)||String(e); }
+  return !!CLOUD;
+}
+function cloudErrMsg(){
+  if(window.WorkBuddyCloud) return '云端组件初始化失败'+(CLOUD_ERR?'：'+CLOUD_ERR:'');
+  return '云端组件未加载，请刷新页面重试';
+}
+function deviceId(){
+  let id=null;
+  try{ id=localStorage.getItem('hb_device_id'); }catch(_){}
+  if(!id){ id='dev_'+Date.now().toString(36)+Math.random().toString(36).slice(2,10);
+    try{ localStorage.setItem('hb_device_id', id); }catch(_){}}
+  return id;
+}
 
 const state = {
   cfg:{settings:{},sources:[]},
@@ -422,16 +644,159 @@ const state = {
   zh:{}, showZh:false, transBusy:false,
   speak:{list:[],i:0,on:false,paused:false},
   autoHidden:[],
-  cat:'全部',          // 当前分类：全部/综合/财经/娱乐/科技/社区
+  cat:'全部',          // 当前分类：全部/综合/…（用户自定义）
+  catRen:'',           // V6.2 分类改名/新建中的分类名（''=未在编辑，'__new__'=新建）
   layout:'board',      // 布局：board 看板 / list 列表
+  _errClosed:false,    // V7.9.3：本次运行已手动关闭「失败通知」，换分类/重渲染不再弹
 };
 
-const CATS = ['全部','综合','财经','娱乐','科技','社区'];
-function srcCat(s){ const c=(s&&s.cat)||'综合'; return CATS.includes(c)?c:'综合'; }
+/* ---------------- V7.9.3：本地快照，打开即显示上次抓到的内容 ----------------
+   三端（桌面 exe / 网页版 / 安卓 WebView）共用这套逻辑：
+   每次拿到数据就把「源 → 条目」落进 localStorage，下次冷启动先用它渲染，
+   等接口返回新内容后整页替换。这样哪怕网络/服务器慢，也不会白屏等十几秒。 */
+const SNAP_KEY='hb_snap_v1';
+let _snapT=0;
+function saveSnap(){
+  const now=Date.now();
+  if(now-_snapT<1200) return;      // 节流：分批返回时别写十几次
+  _snapT=now;
+  try{
+    const d={};
+    Object.keys(state.data||{}).forEach(k=>{
+      const v=state.data[k]||{};
+      const its=(v.items||[]);
+      if(!its.length) return;
+      d[k]={items:its.slice(0,60),ts:v.ts||0};
+    });
+    if(!Object.keys(d).length) return;
+    localStorage.setItem(SNAP_KEY,JSON.stringify({v:1,at:now,d:d}));
+  }catch(e){}
+}
+function loadSnap(){
+  try{
+    const j=JSON.parse(localStorage.getItem(SNAP_KEY)||'null');
+    return (j&&j.d)?j:null;
+  }catch(e){ return null; }
+}
+
+/* V6.2：分类由用户自己管理（存配置 settings.cats），CATS 是动态的兜底默认 */
+let CATS = ['全部','综合','财经','娱乐','科技','社区','小说','推广','宏观政策','前沿 AI','生物前沿','心理学刊','历史深度','楼市基建','能源电力','创业投融资','学术顶刊','汽车产业','材料科学刊','环境生态刊','公共卫生刊','神经科学刊','物理天文刊','化学化工刊','农林食品刊','计算机理论刊','法学与治理刊','城市规划刊','药学与药理刊'];
+/* M8.4：已整类下线的分类，任何来源（老配置/云端同步/旧客户端）带回来都不显示 */
+const DROP_CATS = ['国际新闻','币圈','医疗期刊','航天军工','消费品牌','跨境出海','体育赛事','哲学社会刊','产业赛道'];
+const catsOnly = () => CATS.slice(1);
+/* V6.7：分类可隐藏（settings.hideCats），导航栏只显示未隐藏的分类；源和分类本身都保留 */
+/* V8.0.1：版本自带的 17 个默认隐藏分类——只要用户没点过「恢复显示」，即使配置/本机副本里
+   的 hideCats 被旧数据冲掉，也一律按隐藏处理（旧版客户端、旧缓存页都顶不回来）。 */
+const DEFAULT_HIDDEN = ['前沿 AI','生物前沿','心理学刊','历史深度','能源电力','创业投融资','学术顶刊',
+  '汽车产业','材料科学刊','公共卫生刊','神经科学刊','物理天文刊','化学化工刊','农林食品刊',
+  '计算机理论刊','法学与治理刊','药学与药理刊'];
+function hiddenCats(){
+  const s=(state.cfg&&state.cfg.settings)||{};
+  const h=(Array.isArray(s.hideCats)?s.hideCats:[]).filter(x=>typeof x==='string');
+  const unh=(Array.isArray(s.unhideCats)?s.unhideCats:[]).filter(x=>typeof x==='string');
+  DEFAULT_HIDDEN.forEach(c=>{
+    if(h.indexOf(c)<0 && unh.indexOf(c)<0 && CATS.indexOf(c)>=0) h.push(c);
+  });
+  return h;
+}
+function visibleCatsList(){ return CATS.filter(c=>c==='全部'||hiddenCats().indexOf(c)<0); }
+/* V8.0.0：推广分类（广告位）不可隐藏/删除，只能排序；本地分类要设了地区才出现，且可隐藏/删除 */
+const PROTECT_CAT = '推广';
+function hasRegion(){ return ((state.cfg&&state.cfg.sources)||[]).some(s=>s&&s.id==='region_news'); }
+function regionVisible(){ return hasRegion() && hiddenCats().indexOf('本地')<0; }
+/* 删除「本地」分类：清空地区设置并移除 region_news 源（分类里不会再出现） */
+function clearRegion(){
+  const st=(state.cfg.settings=state.cfg.settings||{});
+  st.region='';
+  state.cfg.sources=state.cfg.sources.filter(s=>s&&s.id!=='region_news');
+  const h=hiddenCats(), i=h.indexOf('本地');
+  if(i>=0){ h.splice(i,1); st.hideCats=h; }
+  if(state.cat==='__region'){ state.cat='全部'; state.view='all'; }
+  saveCfg(); refreshCats(); renderCats(); renderSidebar();
+  if($('#mask')&&$('#mask').classList.contains('on')) renderModal();
+  render(); toast('已删除「本地」分类，地区设置已清空（可到设置里重新填）');
+}
+function setHiddenCat(c,hide){
+  const st=(state.cfg.settings=state.cfg.settings||{});
+  const h=hiddenCats(), i=h.indexOf(c);
+  if(hide && i<0) h.push(c);
+  if(!hide && i>=0) h.splice(i,1);
+  st.hideCats=h;
+  if(hide && state.cat===c) state.cat='全部';   // 正看着的分类被隐藏 → 回退「全部」
+}
+function refreshCats(){
+  const cs = (state.cfg && state.cfg.settings && Array.isArray(state.cfg.settings.cats) && state.cfg.settings.cats.length)
+    ? state.cfg.settings.cats : CATS.slice(1);
+  /* M9.2：兜底——源用到的分类若不在清单里（旧客户端/旧配置），自动补进 CATS，
+     否则 srcCat() 会把它算成「综合」，界面上看就是新分类消失、综合源数暴涨 */
+  const extra=[];
+  ((state.cfg && state.cfg.sources) || []).forEach(s=>{
+    splitCat(s && s.cat).forEach(c=>{
+      if(c && cs.indexOf(c)<0 && DROP_CATS.indexOf(c)<0 && extra.indexOf(c)<0) extra.push(c);
+    });
+  });
+  CATS = ['全部'].concat(cs.filter(c=>DROP_CATS.indexOf(c)<0), extra);
+}
+/* V8.0.2：一个新闻源可以同时属于多个分类（存成「开源,资源」），下面统一按数组处理 */
+function splitCat(raw){
+  return String(raw==null?'':raw).split(/[,，、;；/]+/).map(x=>x.trim()).filter(Boolean);
+}
+function srcCats(s){
+  const cs=splitCat(s&&s.cat).filter(c=>CATS.includes(c));
+  return cs.length?cs:['综合'];
+}
+function srcCat(s){ return srcCats(s)[0]; }
+function catHas(s,c){ return srcCats(s).indexOf(c)>=0; }
+function catLabel(s){ return srcCats(s).join(' · '); }
+function setSrcCats(s,arr){
+  const uniq=[];
+  (arr||[]).forEach(c=>{ if(c&&uniq.indexOf(c)<0) uniq.push(c); });
+  s.cat=(uniq.length?uniq:['综合']).slice(0,4).join(',');
+}
 function inCat(s){
-  if(state.cat==='全部' || state.cat==='__top') return true;
+  /* M8.0：修复「隐藏分类后侧边栏仍显示该分类的源」——全部/总排行视图过滤掉已隐藏分类的源 */
+  const hid=hiddenCats();
+  if(state.cat==='全部' || state.cat==='__top'){
+    return !srcCats(s).some(c=>hid.indexOf(c)>=0);
+  }
   if(state.cat==='__region') return s.id==='region_news';
-  return srcCat(s)===state.cat;
+  return catHas(s,state.cat);
+}
+
+/* V7.9.3：网页版地址（关于/设置里点一下就复制并跳转） */
+const WEB_URL = 'https://rebang-web.app.workbuddy.host/?sharecode=2SURQEZFNL';
+/* V7.9.4：推广位由作者在中心服务器统一维护，所有客户端只读同步。
+   AD_KEYS 里的字段不再参与「本机设置」与「账号云同步」，避免被普通用户覆盖。 */
+const AD_KEYS = ['adStyle','adWarm','adWarmSub','adTitle','adDesc','adUrl','adContact'];
+function adBase(){
+  try{ return (location.host === new URL(WEB_URL).host) ? '' : new URL(WEB_URL).origin; }
+  catch(e){ return ''; }
+}
+/* 拉取作者最新推广位：成功则覆盖并缓存；失败用缓存兜底（离线也能显示上一次的内容） */
+function adCached(){
+  try{ const c=JSON.parse(localStorage.getItem('hb_ad_v1')||'null'); return (c&&typeof c==='object')?c:{}; }
+  catch(e){ return {}; }
+}
+async function syncAd(){
+  if(!state.cfg) return false;
+  state.cfg.settings = state.cfg.settings || {};
+  try{
+    const ctrl = new AbortController();
+    const tm = setTimeout(()=>{ try{ ctrl.abort(); }catch(e){} }, 4000);
+    const r = await fetch(adBase()+'/api/ad', {signal:ctrl.signal, cache:'no-store'});
+    clearTimeout(tm);
+    const j = await r.json();
+    if(j && j.ok && j.ad){
+      AD_KEYS.forEach(k=>{ if(j.ad[k]) state.cfg.settings[k]=j.ad[k]; });
+      try{ localStorage.setItem('hb_ad_v1', JSON.stringify(j.ad)); }catch(e){}
+      return true;
+    }
+  }catch(e){}
+  try{
+    const c = JSON.parse(localStorage.getItem('hb_ad_v1')||'null');
+    if(c && typeof c==='object') AD_KEYS.forEach(k=>{ if(c[k]) state.cfg.settings[k]=c[k]; });
+  }catch(e){}
+  return false;
 }
 
 const ICON = {
@@ -443,12 +808,180 @@ const ICON = {
 
 function toast(m){ const t=$('#toast'); t.textContent=m; t.classList.add('on');
   clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('on'),2000); }
+function copyText(t){
+  const done=()=>toast('已复制到剪贴板'), fail=()=>toast('复制失败，请手动复制');
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(t).then(done).catch(()=>_fbCopy(t,done,fail));
+  }else _fbCopy(t,done,fail);
+}
+function _fbCopy(t,done,fail){
+  const ta=el('textarea'); ta.value=t;
+  ta.style.cssText='position:fixed;left:-999px;top:0;opacity:0';
+  document.body.appendChild(ta); ta.select();
+  try{ document.execCommand('copy')?done():fail(); }catch(e){ fail(); }
+  ta.remove();
+}
+/* ---------------- V7.9 指针拖拽排序 ----------------
+   用 pointer 事件自实现（浏览器 HTML5 拖拽在 Edge 应用窗口里时常失灵）：
+   鼠标左键按住移动 6px 即开始拖动；触屏长按 0.35 秒后可拖。
+   松手时：先看落在 cfg.targets（换分组/隐藏/删除等），再落在同类行上=排序。 */
+function ptrSort(box,cfg){
+  if(box._ptrBound) return; box._ptrBound=true;
+  const axis=cfg.axis||'y';
+  let st=null;
+  function begin(e){
+    if(st.started) return;
+    st.started=true;
+    document.body.classList.add('ptr-sorting');
+    const g=st.item.cloneNode(true);
+    g.className+=' ptr-ghost';
+    g.style.width=st.item.offsetWidth+'px';
+    g.style.height=st.item.offsetHeight+'px';
+    document.body.appendChild(g);
+    st.ghost=g; st.item.classList.add('ptr-drag');
+    if(cfg.onStart) cfg.onStart(st.item);
+    placeGhost(e);
+  }
+  function placeGhost(e){
+    if(st.ghost){ st.ghost.style.left=(e.clientX+12)+'px'; st.ghost.style.top=(e.clientY+8)+'px'; }
+  }
+  function clearHi(){ document.querySelectorAll('.ptr-over').forEach(n=>n.classList.remove('ptr-over')); }
+  function cleanup(){
+    if(st){
+      if(st.ghost) st.ghost.remove();
+      st.item.classList.remove('ptr-drag');
+      clearHi();
+      document.body.classList.remove('ptr-sorting');
+      if(cfg.onEnd) cfg.onEnd(st.item);
+    }
+    document.removeEventListener('pointermove',mv);
+    document.removeEventListener('pointerup',up);
+    document.removeEventListener('pointercancel',cancel);
+    st=null;
+  }
+  function mv(e){
+    if(!st) return;
+    if(!st.started){
+      if(e.pointerType==='mouse'){
+        if(Math.abs(e.clientX-st.x)>6||Math.abs(e.clientY-st.y)>6) begin(e);
+        else return;
+      }else return;
+    }
+    e.preventDefault();
+    placeGhost(e);
+    const t=document.elementFromPoint(e.clientX,e.clientY);
+    const hit=t&&t.closest?t.closest(cfg.item):null;
+    clearHi();
+    st.extra=null; st.target=null;
+    if(cfg.targets){
+      for(const tg of cfg.targets){
+        const el2=t&&t.closest?t.closest(tg.sel):null;
+        if(el2){ st.extra={tg,el:el2}; el2.classList.add('ptr-over'); return; }
+      }
+    }
+    if(hit&&hit!==st.item&&box.contains(hit)){
+      st.target=hit;
+      const r=hit.getBoundingClientRect();
+      st.before= axis==='y'? e.clientY<r.top+r.height/2 : e.clientX<r.left+r.width/2;
+      hit.classList.add('ptr-over');
+    }
+  }
+  function up(e){
+    if(st&&st.started){
+      if(st.extra){ st.extra.tg.onDrop(st.extra.el,st.item,e); }
+      else if(st.target&&cfg.onDrop){ cfg.onDrop(st.item,st.target,!!st.before,e); }
+    }
+    cleanup();
+  }
+  function cancel(){ cleanup(); }
+  box.addEventListener('pointerdown',e=>{
+    if(e.button!==undefined&&e.button!==0) return;
+    const item=e.target.closest(cfg.item);
+    if(!item||!box.contains(item)) return;
+    if(cfg.canDrag&&!cfg.canDrag(item,e.target)) return;
+    if(st) cleanup();
+    st={item,x:e.clientX,y:e.clientY,started:false};
+    document.addEventListener('pointermove',mv,{passive:false});
+    document.addEventListener('pointerup',up);
+    document.addEventListener('pointercancel',cancel);
+    if(e.pointerType!=='mouse') st.lt=setTimeout(()=>begin(e),350);
+  });
+  box.addEventListener('dragstart',e=>{ if(st&&st.started) e.preventDefault(); });  // 指针拖拽期间屏蔽原生拖拽
+  box.addEventListener('selectstart',e=>{ if(st&&st.started) e.preventDefault(); });
+}
+/* V7.9.1：一键上移/下移（不依赖拖拽，单击必定生效）
+   onlyVisible=true 时按「侧栏当前分类下可见的源」移动，避免跨分类错位 */
+function moveSourceStep(id,dir,onlyVisible){
+  const arr=state.cfg.sources;
+  const vis=onlyVisible?arr.filter(s=>s.enabled&&inCat(s)):arr;
+  const vi=vis.findIndex(s=>s.id===id);
+  if(vi<0) return;
+  const nb=vis[vi+dir];
+  if(!nb){ toast(dir<0?'已经是最上面了':'已经是最下面了'); return; }
+  const i=arr.findIndex(s=>s.id===id);
+  const [m]=arr.splice(i,1);
+  let k=arr.findIndex(s=>s.id===nb.id);
+  if(k<0){ arr.splice(i,0,m); return; }
+  if(dir>0) k+=1;
+  arr.splice(k,0,m);
+  saveCfg(); renderSidebar();
+  if($('#mask')&&$('#mask').classList.contains('on')) renderModal();
+  render();
+  toast('已'+(dir<0?'上移':'下移')+'「'+(m.name||'')+'」');
+}
+function moveSource(fromId,toId,before){  const arr=state.cfg.sources;
+  const fi=arr.findIndex(x=>x.id===fromId), ti=arr.findIndex(x=>x.id===toId);
+  if(fi<0||ti<0||fi===ti) return;
+  const [m]=arr.splice(fi,1);
+  let ins=arr.findIndex(x=>x.id===toId);
+  if(ins<0){ arr.splice(fi,0,m); return; }
+  if(!before) ins+=1;
+  arr.splice(ins,0,m);
+  saveCfg(); renderSidebar(); render(); toast('已调整顺序');
+}
+/* V7.9：设置页源行按住拖动排序 + 拖到分类块换分组；分类块按住拖动排序 */
+function bindModalDrag(box){
+  ptrSort(box,{item:'.srcrow[data-sid]',axis:'y',
+    canDrag:(item,t)=>!t.closest('input,select,button')&&!t.closest('.sw'),
+    targets:[
+      {sel:'.cmi[data-cat]', onDrop:(chip,item)=>{
+        const s=state.cfg.sources.find(x=>x.id===item.dataset.sid); if(!s) return;
+        const c=chip.dataset.cat;
+        if(catHas(s,c)){ toast('「'+s.name+'」已经在「'+c+'」里了'); return; }
+        setSrcCats(s,srcCats(s).concat([c])); saveCfg(); renderCats(); renderSidebar(); renderModal(); render();
+        toast('「'+s.name+'」已加入「'+c+'」（现在是 '+catLabel(s)+'）'); }}
+    ],
+    onDrop:(d,t,before)=>moveSource(d.dataset.sid,t.dataset.sid,before)
+  });
+}
+function bindCmDrag(cm,reCM){
+  ptrSort(cm,{item:'.cmi[data-cat]',axis:'x',
+    onDrop:(d,t,before)=>{
+      const from=d.dataset.cat, to=t.dataset.cat;
+      if(from===to) return;
+      const cs=state.cfg.settings.cats;
+      if(cs.indexOf(from)<0||cs.indexOf(to)<0) return;
+      cs.splice(cs.indexOf(from),1);
+      let j=cs.indexOf(to); if(!before) j+=1;
+      cs.splice(j,0,from);
+      saveCfg(); reCM(); renderCats(); renderSidebar(); render(); toast('已调整分类顺序');
+    }
+  });
+}
 function fmtTime(ts){ if(!ts)return '—'; const d=new Date(ts*1000),n=new Date();
   const hm=d.toTimeString().slice(0,5);
   return d.toDateString()===n.toDateString()? hm : (d.getMonth()+1)+'/'+d.getDate()+' '+hm; }
 const api=(p,o)=>fetch(p,o).then(r=>r.json());
 
 function saveCfg(){ clearTimeout(state._sv);
+  /* V7.9.3：设置双写——服务端配置文件 + 本机 localStorage，
+     网页版/APK 换设备或云端实例重启都不会丢使用习惯
+     V7.9.4：推广位字段只由作者维护，不进本机副本（否则会把作者更新的内容挡回去） */
+  try{
+    const cp=Object.assign({},state.cfg.settings||{});
+    AD_KEYS.forEach(k=>{ delete cp[k]; });
+    localStorage.setItem('hb_cfg_local', JSON.stringify(cp));
+  }catch(e){}
   state._sv=setTimeout(()=>{ api('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({settings:state.cfg.settings,sources:state.cfg.sources})}).catch(()=>{});
     if(typeof renderCats==='function') renderCats();
@@ -487,40 +1020,128 @@ function applyLook(){
 }
 
 /* ---------------- 侧栏 ---------------- */
-let dragId=null;
+/* V7.9：侧栏源行改用指针拖拽（鼠标按住直接拖 / 触屏长按拖），支持：
+   ①行与行之间排序  ②拖到顶部分类页签=换分组  ③拖到底部投放区=隐藏/删除 */
+function bindSidebarDrag(box){
+  ptrSort(box,{item:'.src-item',axis:'y',
+    canDrag:(item,t)=>!t.classList.contains('sw')&&!t.closest('.sw')&&!t.closest('.mv'),   // 点开关/上下移按钮不算拖动
+    onStart:()=>{ const z=$('#srcDropZone'); if(z) z.style.display='flex'; },
+    onEnd:()=>{ const z=$('#srcDropZone'); if(z) z.style.display='none'; },
+    targets:[
+      {sel:'#catRow button[data-c]', onDrop:(tab,item)=>{
+        const s=state.cfg.sources.find(x=>x.id===item.dataset.id); if(!s) return;
+        const c=tab.dataset.c;
+        if(['全部','__top','__region'].includes(c)) return;
+        if(catHas(s,c)){ toast('「'+s.name+'」已经在「'+c+'」里了'); return; }
+        setSrcCats(s,srcCats(s).concat([c])); saveCfg(); renderCats(); renderSidebar();
+        if($('#mask').classList.contains('on')) renderModal();
+        toast('「'+s.name+'」已加入「'+c+'」（现在是 '+catLabel(s)+'）'); }},
+      {sel:'#srcDropZone .dz-hide', onDrop:(dz,item)=>{
+        const s=state.cfg.sources.find(x=>x.id===item.dataset.id); if(!s) return;
+        s.enabled=false; saveCfg(); renderSidebar(); render();
+        toast('已隐藏「'+s.name+'」，可在「设置 → 新闻源」重新打开'); }},
+      {sel:'#srcDropZone .dz-del', onDrop:(dz,item)=>{
+        const s=state.cfg.sources.find(x=>x.id===item.dataset.id); if(!s) return;
+        if(!confirm('确定删除源「'+s.name+'」？删除后升级也不会自动补回。')) return;
+        state.cfg.sources=state.cfg.sources.filter(x=>x.id!==s.id);
+        if(state.view===s.id) state.view='all';
+        saveCfg(); renderSidebar(); render(); toast('已删除「'+s.name+'」'); }}
+    ],
+    onDrop:(d,t,before)=>moveSource(d.dataset.id,t.dataset.id,before)
+  });
+}
+/* V7.9.5：点源前面的圆点（绿/红/灰）→ 用系统浏览器打开该新闻源官网。
+   三端一致：安卓走 RebangNative.openUrl（系统浏览器），
+   桌面/网页走 window.open（exe 是 Chrome/Edge 窗口模式，会开成普通浏览器标签）。 */
+const SRC_HOME = {
+  weibo:'https://s.weibo.com/top/summary',
+  bilibili:'https://www.bilibili.com/v/popular/rank/all',
+  bili_hot:'https://www.bilibili.com/v/popular/all',
+  bili_rss:'https://www.bilibili.com/v/popular/rank/all',
+  zhihu:'https://www.zhihu.com/hot',
+  zhihudaily:'https://daily.zhihu.com/',
+  ithome:'https://www.ithome.com/',
+  ithome_rss:'https://www.ithome.com/',
+  sspai:'https://sspai.com/',
+  sspai_rss:'https://sspai.com/',
+  juejin:'https://juejin.cn/',
+  v2ex:'https://www.v2ex.com/?tab=hot',
+  yicai:'https://www.yicai.com/'
+};
+/* 把抓取地址换算成「人能看的官网地址」：接口/订阅地址回退到站点根 */
+function srcHomeUrl(s){
+  if(!s) return '';
+  const k=String(s.id||'').toLowerCase();
+  if(SRC_HOME[k]) return SRC_HOME[k];
+  const raw=s.home||s.url||'';
+  if(!raw) return '';
+  try{
+    const o=new URL(raw, location.href);
+    if(/^api\./i.test(o.hostname)) return o.protocol+'//'+o.hostname.replace(/^api\./i,'')+'/';
+    if(/(^|\/)(api|ajax|rss|feed)(\/|$)/i.test(o.pathname)
+       || /\.(json|xml|rss)(\?|$)/i.test(o.pathname+o.search)) return o.protocol+'//'+o.hostname+'/';
+    return raw;
+  }catch(e){ return raw; }
+}
+function srcLocalHost(){
+  const h=location.hostname;
+  return location.protocol==='file:'||h==='127.0.0.1'||h==='localhost'||h==='::1';
+}
+/* 桌面版（本机服务）走 /api/openurl，交给系统默认浏览器；
+   网页版直接 window.open 开新标签；安卓走原生桥 */
+async function openInBrowser(u){
+  if(!u) return false;
+  try{ const nat=window.RebangNative; if(nat&&nat.openUrl){ nat.openUrl(u); return true; } }catch(e){}
+  if(srcLocalHost()){
+    try{
+      const r=await api('/api/openurl',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({url:u})});
+      if(r&&r.ok) return true;
+    }catch(e){}
+  }
+  try{ const w=window.open(u,'_blank'); if(w) return true; }catch(e){}
+  try{ location.href=u; return true; }catch(e){}
+  return false;
+}
+async function openSourceSite(s){
+  const u=srcHomeUrl(s);
+  if(!u){ toast('这个源没有可打开的地址'); return; }
+  let host=''; try{ host=new URL(u).hostname; }catch(e){}
+  const ok=await openInBrowser(u);
+  toast(ok?('已在浏览器打开 '+(host||u)):('打不开这个地址：'+u));
+}
+
 function renderSidebar(){
   const box=$('#srcList'); box.innerHTML='';
+  bindSidebarDrag(box);
   const shown = state.cfg.sources.filter(s=>s.enabled && inCat(s));
   const allOn = state.cfg.sources.filter(s=>s.enabled);
   $('#srcCount').textContent = shown.length+'/'+state.cfg.sources.length;
   const lb=$('#srcLabel');
-  if(lb) lb.textContent = (state.cat==='全部'?'新闻源 · 可拖动排序':state.cat==='__top'?'总排行 · 全部源':state.cat==='__region'?'地区新闻 · 使用者设置':state.cat+' · 可拖动排序');
+  if(lb) lb.textContent = (state.cat==='全部'?'新闻源 · 按住拖动可排序':state.cat==='__top'?'总排行 · 全部源':state.cat==='__region'?'本地 · 使用者设置':state.cat+' · 按住拖动可排序');
   shown.forEach(s=>{
     const d=state.data[s.id]||{};
     const cls=['src-item', state.view===s.id?'active':'', d.error?'err':(d.items&&d.items.length?'ok':'')].filter(Boolean).join(' ');
     const row=el('div',cls);
-    row.draggable=true;
     row.dataset.id=s.id;
     row.innerHTML=`<span class="dot"></span><span class="nm">${esc(s.name)}</span>
       <span class="cnt">${d.items&&d.items.length?d.items.length:'·'}</span>
+      <span class="mv"><button data-mv="-1" title="上移一位">▲</button><button data-mv="1" title="下移一位">▼</button></span>
       <span class="sw on" title="点击隐藏该源"></span>`;
     row.onclick=e=>{
+      const mv=e.target.closest && e.target.closest('[data-mv]');
+      if(mv){ e.stopPropagation(); moveSourceStep(s.id, +mv.dataset.mv, true); return; }   // V7.9.1：一键上移/下移
       if(e.target.classList.contains('sw')){ s.enabled=false; saveCfg(); renderSidebar(); render(); return; }
       state.view=s.id; renderSidebar(); render();
     };
-    row.ondragstart=e=>{ dragId=s.id; e.dataTransfer.effectAllowed='move'; row.classList.add('drag'); };
-    row.ondragend=()=>{ row.classList.remove('drag'); document.querySelectorAll('.src-item').forEach(n=>n.classList.remove('over')); };
-    row.ondragover=e=>{ e.preventDefault(); row.classList.add('over'); };
-    row.ondragleave=()=>row.classList.remove('over');
-    row.ondrop=e=>{
-      e.preventDefault(); row.classList.remove('over');
-      if(!dragId||dragId===s.id) return;
-      const arr=state.cfg.sources;
-      const from=arr.findIndex(x=>x.id===dragId), to=arr.findIndex(x=>x.id===s.id);
-      if(from<0||to<0) return;
-      const [m]=arr.splice(from,1); arr.splice(to,0,m);
-      saveCfg(); renderSidebar(); toast('已调整顺序');
-    };
+    /* V7.9.5：点圆点 = 用浏览器打开该源官网（不切换当前视图） */
+    const dot=row.querySelector('.dot');
+    if(dot){
+      dot.title='用浏览器打开「'+s.name+'」的官网';
+      dot.setAttribute('role','button');
+      dot.setAttribute('aria-label','用浏览器打开 '+s.name);
+      dot.onclick=e=>{ e.preventDefault(); e.stopPropagation(); openSourceSite(s); };
+    }
     box.appendChild(row);
   });
   if(!shown.length){
@@ -528,41 +1149,86 @@ function renderSidebar(){
       ? '<div class="big">🗂</div>「'+esc(state.cat)+'」分类下没有可用的源<br>点上方「全部」查看其他分类'
       : '<div class="big">👀</div>所有源都被隐藏了<br>去「设置 → 新闻源」打开'));
   }
+
+  /* V7.1/M5.4：拖动源到下方投放区 = 隐藏 / 删除（投放区随指针拖拽亮出） */
+  const dz=el('div','src-dropzone'); dz.id='srcDropZone';
+  dz.style.display='none';
+  dz.innerHTML='<span class="dz-btn dz-hide">🚫 松手隐藏该源</span><span class="dz-btn dz-del">🗑 松手删除该源</span>';
+  box.appendChild(dz);
 }
 
 /* ---------------- 数据 ---------------- */
 const enabled=()=>state.cfg.sources.filter(s=>s.enabled);
+/* M9.1：只有侧边栏显示的分类才抓取（隐藏分类的源关闭且不参与刷新/启动检测） */
+const fetchable=()=>{ const hid=hiddenCats();
+  return enabled().filter(s=>!srcCats(s).some(c=>hid.indexOf(c)>=0)); };
 
 function loadSources(srcs, force){
   const list=srcs.filter(s=>s&&s.id);
   if(!list.length) return Promise.resolve();
   list.forEach(s=>state.loading.add(s.id));
-  return Promise.all(list.map(s=>
-    api('/api/hot?ids='+encodeURIComponent(s.id)+(force?'&force=1':''))
-      .then(r=>Object.assign(state.data,r.sources||{}))
-      .catch(()=>{ (state.data[s.id]=state.data[s.id]||{}).error='本地服务无响应'; })
-      .finally(()=>{ state.loading.delete(s.id);
-        const c=$('#content'), sc=c.scrollTop; renderSidebar(); render(); c.scrollTop=sc; })
-  ));
+  /* 分批请求：每批 16 个源合一个请求，正好喂满后端 24 线程抓取池；
+     浏览器同域只有 6 个并发连接，逐源发请求会让 149 个源排队变慢。
+     每批返回立即渲染（渐进显示，先到先看）。 */
+  /* V7.9.2：首批只放 8 个源，先让首屏出来；后面仍按 16 个一批补满（24 线程抓取池） */
+  const groups=[];
+  for(let i=0, n=8; i<list.length; i+=n, n=16) groups.push(list.slice(i,i+n));
+  const one=(grp,gi)=>{
+    const ids=grp.map(s=>s.id).join(',');
+    /* V7.9.2：首批最多等 4 秒出内容，后面的批次只等 1.2 秒——
+       没抓到的源走下面「3 秒静默跟进」，不拖住整页 */
+    return api('/api/hot?ids='+encodeURIComponent(ids)+(force?'&force=1':'')
+      +'&wait='+(gi===0?4:1.2))
+      .then(r=>{
+        Object.assign(state.data,r.sources||{});
+        /* 还没抓到数据的源继续转圈（后台在抓，跟进轮会补上） */
+        (r.stale||[]).forEach(id=>{
+          const d=r.sources[id];
+          if(!d || !(d.items||[]).length) state.loading.add(id);
+        });
+        /* 缓存秒开：过期的源后台刷新中，3 秒后静默跟进拉新数据（最多 3 轮） */
+        if(r.stale && r.stale.length && !force){
+          const ids2=r.stale.join(',');
+          const follow=n=>setTimeout(()=>{
+            api('/api/hot?ids='+encodeURIComponent(ids2)).then(r2=>{
+              Object.assign(state.data,r2.sources||{});
+              const c=$('#content'), sc=c.scrollTop; render(); c.scrollTop=sc;
+              if((r2.stale||[]).length && n<3) follow(n+1); saveSnap();
+            }).catch(()=>{});
+          }, 3000);
+          follow(1);
+          if(!window._staleTip){ window._staleTip=1; toast('已显示上次内容，正在后台更新…'); }
+        }
+      })
+      .catch(()=>{ grp.forEach(s=>{ (state.data[s.id]=state.data[s.id]||{}).error='本地服务无响应'; }); })
+      .finally(()=>{ grp.forEach(s=>state.loading.delete(s.id));
+        /* V8.0.0 流畅度：分批抓取时合并到下一帧渲染，避免一秒内连续多轮全量重画 */
+        if(!window._rbRaf){ window._rbRaf=requestAnimationFrame(()=>{ window._rbRaf=0;
+          const c=$('#content'), sc=c.scrollTop; renderSidebar(); render(); c.scrollTop=sc; }); }
+        saveSnap(); });
+  };
+  return Promise.all(groups.map((g,i)=>one(g,i)));
 }
 function refreshAll(force){
   const b=$('#btnRefresh'); b.classList.add('spin');
-  loadSources(enabled(), force!==false).finally(()=>setTimeout(()=>b.classList.remove('spin'),300));
+  loadSources(fetchable(), force!==false).finally(()=>setTimeout(()=>b.classList.remove('spin'),300));
 }
 
 /* ---------------- 聚合 ---------------- */
 function aggregate(){
   const out=[];
+  const isTopCat=(state.cat==='__top');   // M8.1：总排行只取每个源的前 3 名
   enabledInCat().forEach(s=>{
     const d=state.data[s.id]; if(!d||!d.items) return;
-    const per=Math.min(s.count||state.cfg.settings.perSource||30, d.items.length);
+    const per=isTopCat?Math.min(3,d.items.length)
+                      :Math.min(s.count||state.cfg.settings.perSource||30, d.items.length);
     const len=Math.max(1,d.items.length);
     d.items.slice(0,per).forEach((it,i)=>out.push(Object.assign({},it,{srcName:s.name,srcId:s.id,score:(1-i/len)*100})));
   });
   const seen=new Set(), list=[];
   out.forEach(it=>{ const k=it.title.replace(/[\s\W]+/g,'').slice(0,30); if(seen.has(k))return; seen.add(k); list.push(it); });
   if(state.cat==='__top'||state.cat==='__region'){
-    // 总排行/地区新闻：按阅读/评论/热度数值降序
+    // 总排行/本地：按阅读/评论/热度数值降序
     list.sort((a,b)=>(b.heat||0)-(a.heat||0)||(b.score-a.score));
   }
   else if(state.cfg.settings.sortAgg==='source') list.sort((a,b)=>(a.srcId<b.srcId?-1:1)||(b.score-a.score));
@@ -594,7 +1260,7 @@ function cardHTML(it,showSrc){
         ${showSrc&&it.srcName?`<span class="badge">${esc(it.srcName)}</span>`:''}
         ${it.extra?`<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:110px">${esc(it.extra)}</span>`:''}
       </div>
-      <h3>${esc(titleOf(it))}</h3>
+      <h3${ghZh(it)?` title="${esc(ghZh(it))}"`:''}>${trTitleHTML(it)}${tTrHTML(it)}</h3>
       <div class="cmeta">${it.heatText?`<span class="heat">🔥 ${esc(it.heatText)}</span>`:''}
         ${!showSrc&&it.srcName?`<span class="badge" style="margin-left:auto">${esc(it.srcName)}</span>`:''}
       </div>
@@ -607,21 +1273,344 @@ function hcardHTML(it){
   return `<div class="hcard" data-url="${esc(it.url)}" data-idx="${it._i}">
     <div class="hthumb"><div class="ph" style="${it.img?'display:none':''}">${ph}</div>${img}</div>
     ${actsHTML(it)}
-    <div class="hbody"><h3>${esc(titleOf(it))}</h3>
+    <div class="hbody"><h3${ghZh(it)?` title="${esc(ghZh(it))}"`:''}>${trTitleHTML(it)}${tTrHTML(it)}</h3>
       ${it.extra?`<div class="ex">${esc(it.extra)}</div>`:''}
       <div class="hmeta"><span class="rk ${rankCls(it.rank)}">${it.rank}</span>
         ${it.heatText?`<span class="heat">🔥 ${esc(it.heatText)}</span>`:''}</div>
     </div></div>`;
 }
 function rowHTML(it,showSrc){
+  const zh=ghZh(it);
   return `<div class="row" data-url="${esc(it.url)}" data-idx="${it._i}">
     <span class="rk ${rankCls(it.rank)}">${it.rank}</span>
-    <span class="tt">${esc(titleOf(it))}</span>
+    <span class="tt"${zh?` title="${esc(zh)}"`:''}>${trTitleHTML(it)}${ghZhHTML(it)}${tTrHTML(it)}</span>
     ${it.extra?`<span class="ex">${esc(it.extra)}</span>`:''}
     ${it.heatText?`<span class="heat">${esc(it.heatText)}</span>`:''}
     ${showSrc&&it.srcName?`<span class="badge">${esc(it.srcName)}</span>`:''}
     ${actsHTML(it)}
   </div>`;
+}
+
+/* V6.7：GitHub 英文简介 → 中文（懒翻译，localStorage 缓存 hb_tr_zh，走本地 /api/translate） */
+let _trC=null,_trBusy=false;
+function trCache(){
+  if(_trC) return _trC;
+  try{ _trC=JSON.parse(localStorage.getItem('hb_tr_zh')||'{}'); }catch(e){ _trC={}; }
+  if(!_trC||typeof _trC!=='object'||Array.isArray(_trC)) _trC={};
+  return _trC;
+}
+/* V7.8.5：英文标题自动中文翻译（Argos 离线优先；缓存 hb_title_tr；只翻当前屏；GitHub 板块不参与） */
+let _tC=null,_tBusy=false;
+function tCache(){
+  if(_tC) return _tC;
+  try{ _tC=JSON.parse(localStorage.getItem('hb_title_tr')||'{}'); }catch(e){ _tC={}; }
+  if(!_tC||typeof _tC!=='object'||Array.isArray(_tC)) _tC={};
+  return _tC;
+}
+function tHash(s){ let h=5381; for(let i=0;i<s.length;i++) h=((h<<5)+h+s.charCodeAt(i))>>>0; return h.toString(36)+'_'+s.length; }
+function isEnTitle(t){
+  t=(t||'').trim();
+  if(!/[A-Za-z]{3}/.test(t)) return false;
+  const cjk=(t.match(/[\u3400-\u9fff\uf900-\ufaff]/g)||[]).length;
+  return cjk===0 || (cjk/t.length)<0.15;   /* 中文占比高就不算英文标题 */
+}
+function titleTrOn(){ return (state.cfg.settings||{}).titleTrans!==false; }
+/* 翻译行 HTML：有缓存直接带文字，否则输出空占位元素等批量回填；绝不改动英文原文 */
+const _tIndex={};        /* hash -> 原始英文标题，供 DOM 扫描补翻时反查 */
+function tTrHTML(it){
+  if(!titleTrOn()) return '';
+  if(/^https:\/\/github\.com\//.test(it.url||'')) return '';   /* GitHub 板块不参与（它有自己的简介翻译） */
+  const t=(it.title||'').trim();
+  if(!isEnTitle(t)) return '';
+  const z=tCache()[t]||'';
+  const h=tHash(t);
+  _tIndex[h]=t;
+  const inner=z?`${esc(z)}<span class="tr-tag">【(机翻)】</span>`:'';
+  return `<span class="zh-tr" data-ttr="${h}">${inner}</span>`;
+}
+/* 渲染后收集当前屏未翻译的英文标题：排队（不丢），批量交给后端（缓存 → 离线模型 → 在线），
+   回来的结果直接回填 DOM；一轮下来还有没翻成的，退避后再补两轮，避免「只翻前几条」。 */
+let _tQ=[], _tRun=false, _tMiss=[], _tRound=0;
+function tEnqueue(list){
+  (list||[]).forEach(t=>{ if(t && _tQ.indexOf(t)<0 && _tMiss.indexOf(t)<0 && !tCache()[t]) _tQ.push(t); });
+}
+function collectTitleTr(items){
+  if(!titleTrOn()) return;
+  const add=[];
+  (items||[]).forEach(it=>{
+    if(!it||/^https:\/\/github\.com\//.test(it.url||'')) return;
+    const t=(it.title||'').trim();
+    if(isEnTitle(t)) add.push(t);
+  });
+  /* 兜底：直接扫页面上的空翻译占位（看板一次渲染的条目比聚合列表上限多，只靠 items 会漏） */
+  document.querySelectorAll('#content .zh-tr').forEach(el=>{
+    if(el.textContent.trim()) return;
+    const t=_tIndex[el.dataset.ttr];
+    if(t) add.push(t);
+  });
+  tEnqueue(add);
+  if(_tQ.length) runTQueue();
+}
+async function tFetchChunk(chunk){
+  try{
+    const r=await fetch('/api/translate',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({texts:chunk,engine:trEngineArg(),keys:pgTrKeys()})});
+    const j=await r.json();
+    return (j&&j.map)||{};
+  }catch(e){ return {}; }
+}
+async function runTQueue(){
+  if(_tRun||!titleTrOn()) return;
+  _tRun=true;
+  try{
+    while(_tQ.length){
+      const chunk=_tQ.splice(0,40);
+      const mp=await tFetchChunk(chunk);
+      const c2=tCache(); let hit=0;
+      Object.keys(mp).forEach(k=>{ const v=String(mp[k]||'').trim(); if(k&&v&&v!==k){ c2[k]=v.slice(0,300); hit++; } });
+      try{ const ks=Object.keys(c2); if(ks.length>3000) ks.slice(0,ks.length-3000).forEach(k=>delete c2[k]);
+        localStorage.setItem('hb_title_tr',JSON.stringify(c2)); }catch(e){}
+      if(hit){   /* 直接回填对应 DOM 节点，避免整页重绘闪烁 */
+        chunk.forEach(t=>{
+          const z=c2[t]; if(!z) return;
+          const h=tHash(t);
+          document.querySelectorAll('[data-ttr="'+h+'"]').forEach(el=>{
+            el.innerHTML=esc(z)+'<span class="tr-tag">【(机翻)】</span>';
+          });
+        });
+      }
+      chunk.forEach(t=>{ if(!tCache()[t] && _tMiss.indexOf(t)<0) _tMiss.push(t); });
+      if(_tQ.length) await new Promise(r=>setTimeout(r,120));
+    }
+  }catch(e){}
+  finally{ _tRun=false; }
+  /* 补翻：还有失败的，等 1.5s/3s 再补两轮（离线模型没装时在线接口偶尔限流，重试基本能补全） */
+  _tMiss=_tMiss.filter(t=>!tCache()[t]);
+  if(_tMiss.length && _tRound<2){
+    _tRound++;
+    const again=_tMiss.slice(0,80); _tMiss=_tMiss.filter(t=>again.indexOf(t)<0);
+    setTimeout(()=>{ if(!titleTrOn()||_tRun) return; tEnqueue(again); if(_tQ.length) runTQueue(); }, 1500*_tRound);
+  }else if(!_tMiss.length){
+    _tRound=0;
+  }
+}
+/* V6.9：一键翻译本页（模式：全中文/中英双显；引擎：谷歌/百度/有道，百度有道需密钥） */
+let _pgTrC=null,_pgTrBusy=false;
+function pgTrCache(){
+  if(_pgTrC) return _pgTrC;
+  try{ _pgTrC=JSON.parse(localStorage.getItem('hb_page_tr')||'{}'); }catch(e){ _pgTrC={}; }
+  if(!_pgTrC||typeof _pgTrC!=='object'||Array.isArray(_pgTrC)) _pgTrC={};
+  return _pgTrC;
+}
+function pgTrKeys(){ try{ const v=JSON.parse(localStorage.getItem('hb_trans_keys')||'{}'); return (v&&typeof v==='object')?v:{}; }catch(e){ return {}; } }
+function pgTrMode(){ return (state.cfg.settings||{}).pageTrans||''; }
+function pgTrEngine(){ return (state.cfg.settings||{}).transEngine||'google'; }
+/* V7.9.7：翻译模型（自动 / 仅在线=关闭离线 / 仅离线）→ 传给后端的 engine 参数 */
+function trEngineArg(){
+  const md=(state.cfg.settings||{}).pageTrModel||'auto';
+  if(md==='offline') return 'argos';
+  if(md==='online') return pgTrEngine();
+  return 'auto';
+}
+function pgTrOf(it){ return pgTrCache()[it.title]||''; }
+function trTitleHTML(it){
+  const m=pgTrMode();
+  if(!m) return esc(titleOf(it));
+  const z=pgTrOf(it);
+  if(m==='zh') return `<span title="${esc(it.title)}">${esc(z||it.title)}</span>`;
+  return z?`${esc(titleOf(it))}<span class="cntr">${esc(z)}</span>`:esc(titleOf(it));
+}
+function collectPageTr(items){
+  const m=pgTrMode(); if(!m||_pgTrBusy) return;
+  const c0=pgTrCache(); const all=[];
+  (items||[]).forEach(it=>{ if(it&&it.title&&!(it.title in c0)&&all.indexOf(it.title)<0) all.push(it.title); });
+  if(!all.length) return;
+  _pgTrBusy=true;
+  const btn=$('#btnTr'), tot=all.length, CH=40; let done=0;   /* M5.5/V7.2：每批 40 条循环补齐，不再一批封顶 */
+  (async()=>{
+    try{
+      for(let i=0;i<all.length;i+=CH){
+        const chunk=all.slice(i,i+CH);
+        let mp={};
+        try{
+          const r=await fetch('/api/translate',{method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({texts:chunk,engine:trEngineArg(),keys:pgTrKeys()})});
+          const j=await r.json(); mp=(j&&j.map)||{};
+        }catch(e){}
+        const c=pgTrCache();
+        Object.keys(mp).forEach(k=>{ const v=String(mp[k]||'').trim(); if(k&&v){ c[k]=v.slice(0,300); } });
+        /* M5.5/V7.2：常规引擎漏翻的条目，云端 LLM 一批兜底补齐 */
+        const missing=chunk.filter(k=>!(k in c));
+        if(missing.length&&typeof ensureCloud==='function'&&ensureCloud()){
+          try{
+            const z=await llmTrBatch(missing);
+            if(z) Object.keys(z).forEach(k=>{ const v=String(z[k]||'').trim(); if(k&&v){ c[k]=v.slice(0,300); } });
+          }catch(e){}
+        }
+        done+=chunk.length;
+        if(btn) btn.title='一键翻译本页（进行中 '+done+'/'+tot+'）';
+        try{ const ks=Object.keys(c); if(ks.length>2000) ks.slice(0,ks.length-2000).forEach(k=>delete c[k]);
+          localStorage.setItem('hb_page_tr',JSON.stringify(c)); }catch(e){}
+        render();
+        await new Promise(r=>setTimeout(r,300));
+      }
+    }catch(e){}
+    finally{ _pgTrBusy=false; if(btn) btn.title='一键翻译本页'; }
+  })();
+}
+/* M5.5/V7.2：云端 LLM 批量翻译兜底（一次补一批标题） */
+async function llmTrBatch(texts){
+  if(typeof CLOUD==='undefined'||!CLOUD||!CLOUD.llm) return null;
+  let mid='';
+  try{ const ls=await CLOUD.llm.models.list();
+    mid=((Array.isArray(ls)&&ls[0]&&(ls[0].id||ls[0].name))||(((ls||{}).data)||[]).map(x=>x&&x.id).find(Boolean)||'');
+  }catch(e){ return null; }
+  if(!mid) return null;
+  const prompt='把 JSON 数组里的每条新闻标题翻译成简体中文。只返回一个 JSON 对象：键=原文，值=中文译文。不要解释、不要输出其他文字。数组：'+JSON.stringify(texts);
+  let out='';
+  const stream=await CLOUD.llm.chat.completions.create({model:mid,stream:true,messages:[{role:'user',content:prompt}]});
+  for await(const ch of stream){ const d=(ch&&ch.choices&&ch.choices[0]&&ch.choices[0].delta)||{}; if(d.content) out+=d.content; }
+  const mm=out.replace(/^```[a-z]*\s*/i,'').replace(/```\s*$/,'').match(/\{[\s\S]*\}/);
+  if(!mm) return null;
+  const o=JSON.parse(mm[0]); const r={};
+  (texts||[]).forEach(t=>{ if(typeof o[t]==='string'&&o[t].trim()) r[t]=o[t]; });
+  return r;
+}
+function toggleTrPop(){
+  const old=$('#trPop'); if(old){ old.remove(); return; }
+  const m=pgTrMode(), eg=pgTrEngine(), keys=pgTrKeys();
+  const S=(state.cfg.settings||{});
+  const tm=S.pageTrModel||'auto';                 /* auto 自动 / online 仅在线（等于关闭离线）/ offline 仅离线 */
+  const isAnd=!!(window.RebangNative&&RebangNative.mlStatus);
+  const offModel=S.offModel||(isAnd?'mlkit':'argos');
+  const pop=document.createElement('div'); pop.id='trPop';
+  pop.style.cssText='position:fixed;top:50px;right:10px;z-index:260;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow-h);padding:10px 12px;width:252px;font-size:13px;max-height:calc(100vh - 70px);overflow-y:auto';
+  pop.innerHTML=`
+    <div style="color:var(--sub);font-size:11.5px;margin-bottom:5px">翻译模型</div>
+    <div style="display:flex;gap:5px;margin-bottom:5px">
+      <button class="mini ${tm==='auto'?'primary':''}" data-tm="auto" title="装了离线模型就用离线，没装走在线">自动</button>
+      <button class="mini ${tm==='online'?'primary':''}" data-tm="online" title="关闭离线翻译，只走在线引擎">仅在线</button>
+      <button class="mini ${tm==='offline'?'primary':''}" data-tm="offline" title="只用离线模型，完全不联网">仅离线</button>
+    </div>
+    <div style="color:var(--sub);font-size:11.5px;margin-bottom:3px">离线模型 <span id="trOffSt" style="opacity:.85">读取中…</span></div>
+    <select id="trModelSel" style="width:100%;box-sizing:border-box;margin-bottom:6px;padding:5px 7px;border-radius:7px;border:1px solid var(--line);background:var(--panel2);color:var(--text);font-size:12px">
+      <option value="argos" ${offModel==='argos'?'selected':''}>Marian·CTranslate2 英→中（约 68MB）</option>
+      <option value="mlkit" ${offModel==='mlkit'?'selected':''}>Google ML Kit 英→中（手机端侧）</option>
+    </select>
+    <div id="trOffAct" style="font-size:11.5px;color:var(--sub);margin-bottom:9px;line-height:1.5"></div>
+    <div style="color:var(--sub);font-size:11.5px;margin-bottom:5px">翻译显示</div>
+    <div style="display:flex;gap:6px;margin-bottom:9px">
+      <button class="mini ${m===''?'primary':''}" data-m="">关</button>
+      <button class="mini ${m==='zh'?'primary':''}" data-m="zh">全中文</button>
+      <button class="mini ${m==='both'?'primary':''}" data-m="both">中英双显</button>
+    </div>
+    <div style="color:var(--sub);font-size:11.5px;margin-bottom:5px">在线引擎（失败自动降级谷歌）</div>
+    <div style="display:flex;gap:6px;margin-bottom:9px">
+      <button class="mini ${eg==='google'?'primary':''}" data-e="google">谷歌</button>
+      <button class="mini ${eg==='baidu'?'primary':''}" data-e="baidu">百度</button>
+      <button class="mini ${eg==='youdao'?'primary':''}" data-e="youdao">有道</button>
+    </div>
+    <div style="color:var(--sub);font-size:11.5px;margin-bottom:3px">百度密钥（appid|secret，<a href="https://fanyi-api.baidu.com/" target="_blank" style="color:var(--blue)">免费申请</a>）</div>
+    <input id="trBaidu" value="${esc(keys.baidu||'')}" placeholder="appid|secret" style="width:100%;box-sizing:border-box;margin-bottom:7px;padding:5px 7px;border-radius:7px;border:1px solid var(--line);background:var(--panel2);color:var(--text);font-size:12px">
+    <div style="color:var(--sub);font-size:11.5px;margin-bottom:3px">有道密钥（appkey|secret，<a href="https://ai.youdao.com/" target="_blank" style="color:var(--blue)">免费申请</a>）</div>
+    <input id="trYoudao" value="${esc(keys.youdao||'')}" placeholder="appkey|secret" style="width:100%;box-sizing:border-box;padding:5px 7px;border-radius:7px;border:1px solid var(--line);background:var(--panel2);color:var(--text);font-size:12px">
+    <div style="color:var(--sub);font-size:11px;margin-top:7px">密钥只保存在本机，不上传云端</div>`;
+  document.body.appendChild(pop);
+  pop.addEventListener('click',e=>e.stopPropagation());
+  pop.querySelectorAll('[data-tm]').forEach(b=>b.onclick=()=>{
+    state.cfg.settings.pageTrModel=b.dataset.tm;
+    saveCfg(); toggleTrPop(); toggleTrPop();
+    toast(b.dataset.tm==='online'?'已关闭离线翻译：只走在线引擎':(b.dataset.tm==='offline'?'只用离线模型，不联网':'自动：有离线模型就本地翻'));
+  });
+  /* 离线模型状态：桌面读 /api/offline/status，安卓读 ML Kit 状态 */
+  const stEl=pop.querySelector('#trOffSt'), actEl=pop.querySelector('#trOffAct');
+  const paintOff=()=>{
+    if(offModel==='mlkit'){
+      if(isAnd){
+        try{
+          const st=JSON.parse(RebangNative.mlStatus()||'{}');
+          stEl.textContent='· 安卓 ML Kit';
+          actEl.innerHTML=st.ready?'<span style="color:#0e9f6e">✓ 语言包已就绪，可完全离线</span>'
+            :'语言包未下载。<a href="#" id="trMlDl" style="color:var(--blue)">点这里下载（约 35MB）</a>';
+          const dl=pop.querySelector('#trMlDl');
+          if(dl) dl.onclick=ev=>{ ev.preventDefault(); try{ RebangNative.mlPrewarm(); }catch(e){} toast('已开始下载，完成前先走在线翻译'); };
+        }catch(e){ stEl.textContent='· 安卓 ML Kit'; }
+      }else{
+        stEl.textContent='· 仅安卓可用';
+        actEl.textContent='ML Kit 只在手机版内置；电脑端请选 Marian 模型。';
+      }
+      return;
+    }
+    fetch('/api/offline/status',{cache:'no-store'}).then(r=>r.json()).then(j=>{
+      const st=(j&&j.status)||{};
+      stEl.textContent='· 桌面端';
+      if(st.state==='downloading'||st.state==='unpacking'){
+        actEl.textContent='正在下载 '+(st.pct||0)+'%（可以关掉这个面板）';
+      }else if(st.installed){
+        actEl.innerHTML='<span style="color:#0e9f6e">✓ 已安装</span> · '+(st.engine||'')+'，'+(st.size?Math.round(st.size/1048576)+'MB':'');
+      }else{
+        actEl.innerHTML='未下载。<a href="#" id="trOffDl" style="color:var(--blue)">点这里下载（约 68MB）</a>，下载后永久离线';
+        const dl=pop.querySelector('#trOffDl');
+        if(dl) dl.onclick=ev=>{ ev.preventDefault();
+          fetch('/api/offline/download',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})
+            .then(()=>{ toast('已开始下载离线模型'); setTimeout(paintOff,1200); }).catch(()=>toast('下载启动失败')); };
+      }
+    }).catch(()=>{ stEl.textContent='· 读取失败'; });
+  };
+  paintOff();
+  pop.querySelector('#trModelSel').onchange=e=>{
+    const v=e.target.value;
+    if(v==='mlkit'&&!isAnd){ toast('ML Kit 只在手机版可用'); e.target.value='argos'; return; }
+    state.cfg.settings.offModel=v; saveCfg(); paintOff();
+    toast(v==='mlkit'?'离线模型：安卓 ML Kit':'离线模型：Marian·CTranslate2');
+  };
+  pop.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>{
+    state.cfg.settings.pageTrans=b.dataset.m; saveCfg(); render(); toggleTrPop();
+  });
+  pop.querySelectorAll('[data-e]').forEach(b=>b.onclick=()=>{
+    state.cfg.settings.transEngine=b.dataset.e; saveCfg(); toggleTrPop(); toggleTrPop();
+  });
+  ['trBaidu','trYoudao'].forEach(id=>{
+    const inp=pop.querySelector('#'+id);
+    inp.onchange=()=>{
+      const k=pgTrKeys();
+      k[id==='trBaidu'?'baidu':'youdao']=inp.value.trim();
+      try{ localStorage.setItem('hb_trans_keys',JSON.stringify(k)); }catch(e){}
+      /* V7.8.5：同步存到后端本机文件 trans_keys.json，下次打开/换浏览器自动回填 */
+      try{ fetch('/api/trans/keys',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({keys:k})}).catch(()=>{}); }catch(e){}
+      toast('密钥已保存');
+    };
+  });
+}
+document.addEventListener('click',e=>{ const p=$('#trPop'); if(p&&!p.contains(e.target)&&e.target.closest&&!e.target.closest('#btnTr')) p.remove(); });
+
+function isGh(it){ return !!it && /^https:\/\/github\.com\//.test(it.url||'') && !!(it.desc||'').trim(); }
+function ghZh(it){ if(!isGh(it)) return ''; return trCache()[it.desc.trim()]||''; }
+function ghZhHTML(it){ const z=ghZh(it); return z?`<span class="ghzh">&emsp;${esc(z)}</span>`:''; }
+async function translateGh(list){
+  const c=trCache(), need=[];
+  (list||[]).forEach(it=>{ if(!isGh(it)) return; const d=it.desc.trim(); if(d && !(d in c) && need.indexOf(d)<0) need.push(d); });
+  if(!need.length||_trBusy) return;
+  _trBusy=true;
+  try{
+    let got=0;
+    for(let i=0;i<need.length;i+=20){
+      const batch=need.slice(i,i+20);
+      try{
+        const r=await fetch('/api/translate?texts='+encodeURIComponent(JSON.stringify(batch)),{cache:'no-store'});
+        const j=await r.json();
+        const m=(j&&j.map)||{};
+        Object.keys(m).forEach(k=>{ const v=String(m[k]||'').trim(); if(k&&v&&v!==k){ c[k]=v.slice(0,160); got++; } });
+      }catch(e){ break; }
+    }
+    if(got){
+      try{ const ks=Object.keys(c); if(ks.length>800) ks.slice(0,ks.length-800).forEach(k=>delete c[k]);
+        localStorage.setItem('hb_tr_zh',JSON.stringify(c)); }catch(e){}
+      render();   // 缓存命中后 need 为空，不会死循环
+    }
+  }catch(e){ /* 翻译失败静默 */ }
+  finally{ _trBusy=false; }
 }
 
 function currentList(){
@@ -637,19 +1626,101 @@ function currentList(){
 /* 当前分类下的源（分类过滤 + 原始开关） */
 function enabledInCat(){ return enabled().filter(inCat); }
 
-/* 分类导航渲染 */
+/* 分类导航渲染
+   V7.9：分类页签改用指针拖拽——按住页签左右拖=排序，拖到「🚫」=隐藏，拖到「🗑」=删除；
+   源行拖到页签上=换分组（在 bindSidebarDrag 的 targets 里处理）。 */
+function bindCatsDrag(box){
+  ptrSort(box,{item:'button[data-c]',axis:'x',
+    canDrag:item=>!['全部','__top'].includes(item.dataset.c),
+    onStart:()=>{ const h=$('#catHideDrop'),d=$('#catDelDrop');
+      if(h) h.style.display='inline-block'; if(d) d.style.display='inline-block'; },
+    onEnd:()=>{ const h=$('#catHideDrop'),d=$('#catDelDrop');
+      if(h) h.style.display='none'; if(d) d.style.display='none'; },
+    targets:[
+      {sel:'#catHideDrop', onDrop:(dz,item)=>{
+        const c=item.dataset.c;
+        if(['全部','__top'].includes(c)) return;
+        if(c===PROTECT_CAT){ toast('「推广」是广告分类，不能隐藏，只能调整排序'); return; }
+        if(c==='__region'){
+          setHiddenCat('本地',true); saveCfg(); renderCats(); renderSidebar();
+          if($('#mask')&&$('#mask').classList.contains('on')) renderModal();
+          render(); toast('已隐藏「本地」，在 设置→新闻源→分类管理 可恢复'); return;
+        }
+        setHiddenCat(c,true); saveCfg(); renderCats(); renderSidebar();
+        if($('#mask')&&$('#mask').classList.contains('on')) renderModal();
+        render(); toast('已隐藏「'+c+'」，在 设置→新闻源→分类管理 可恢复'); }},
+      {sel:'#catDelDrop', onDrop:(dz,item)=>{
+        const c=item.dataset.c;
+        if(c===PROTECT_CAT){ toast('「推广」是广告分类，不能删除，只能调整排序'); return; }
+        if(c==='__region'){ if(!confirm('删除「本地」分类？已设置的地区会被清空（之后可在设置里重新填写）。')) return; clearRegion(); return; }
+        if(c==='综合'){ toast('「综合」是基础分类，不能删除'); return; }
+        if(!c||['全部','__top','__region'].includes(c)) return;
+        if(!confirm('删除分类「'+c+'」？里面的源会移回「综合」，源本身不删。')) return;
+        const cs=(state.cfg.settings.cats=state.cfg.settings.cats||[]);
+        const i=cs.indexOf(c); if(i>=0) cs.splice(i,1);
+        state.cfg.sources.forEach(s=>{ if(catHas(s,c)) setSrcCats(s,srcCats(s).filter(x=>x!==c)); });
+        const hid=(state.cfg.settings.hideCats=state.cfg.settings.hideCats||[]);
+        const hi=hid.indexOf(c); if(hi>=0) hid.splice(hi,1);
+        if(state.cat===c) state.cat='全部';
+        saveCfg(); renderCats(); renderSidebar();
+        if($('#mask')&&$('#mask').classList.contains('on')) renderModal();
+        render(); toast('已删除分类「'+c+'」，其中的源已移回「综合」'); }}
+    ],
+    onDrop:(d,t,before)=>{
+      const from=d.dataset.c, to=t.dataset.c;
+      if(!from||!to||from===to||from==='全部') return;
+      const cs=state.cfg.settings.cats;
+      if(!cs||cs.indexOf(from)<0) return;
+      cs.splice(cs.indexOf(from),1);
+      let j;
+      if(to==='全部') j=0;                              // V7.9.1：拖到最左「全部」= 排到最前
+      else if(to==='__region'||to==='__top') j=cs.length;  // 拖到右侧固定页签 = 排到最后
+      else {
+        const k=cs.indexOf(to);
+        if(k<0){ cs.splice(0,0,from); saveCfg(); renderCats(); render(); return; }
+        j=before?k:k+1;
+      }
+      cs.splice(j,0,from);
+      saveCfg(); renderCats(); render(); toast('已把「'+from+'」排到第 '+(j+1)+' 位');
+    }
+  });
+}
+/* V7.9.1：分类页签「左移/右移」按钮（选中页签时出现；单击必定生效，不依赖拖拽） */
+function moveCatStep(c,dir){
+  const cs=(state.cfg.settings.cats||[]).slice();
+  const i=cs.indexOf(c); if(i<0) return;
+  const j=i+dir;
+  if(j<0||j>=cs.length){ toast(dir<0?'已经是最左边了':'已经是最右边了'); return; }
+  cs.splice(j,0,cs.splice(i,1)[0]);
+  state.cfg.settings.cats=cs;
+  saveCfg(); refreshCats(); renderCats(); renderSidebar();
+  if($('#mask')&&$('#mask').classList.contains('on')) renderModal();
+  render();
+  toast('已'+(dir<0?'左移':'右移')+'「'+c+'」（第 '+(j+1)+' 位）');
+}
 function renderCats(){
   const box=$('#catRow'); if(!box) return;
+  bindCatsDrag(box);
+  // 自愈：隐藏清单可能包含正在看的分类 → 回退「全部」
+  if(state.cat!=='__top' && state.cat!=='__region' && visibleCatsList().indexOf(state.cat)<0) state.cat='全部';
   const shown = enabled();
-  box.innerHTML = CATS.map(c=>{
-    const n = c==='全部' ? shown.length : shown.filter(s=>srcCat(s)===c).length;
-    if(c!=='全部' && !n) return '';   // 该分类没有任何源就不显示
-    return `<button data-c="${c}" class="${state.cat===c?'on':''}">${c}<em>${n}</em></button>`;
+  box.innerHTML = visibleCatsList().map(c=>{
+    const n = c==='全部' ? shown.length : shown.filter(s=>catHas(s,c)).length;
+    const mv = (state.cat===c && c!=='全部')
+      ? `<i class="cmv" data-cmv="-1" title="左移一位（调整分类顺序）">‹</i><i class="cmv" data-cmv="1" title="右移一位（调整分类顺序）">›</i>`
+      : '';
+    return `<button data-c="${c}" class="${state.cat===c?'on':''}" title="${c==='全部'?'全部分类':'可把源行拖到这里换分组；选中后出现 ‹ › 可左右移动排序'}">${c}<em>${n}</em>${mv}</button>`;
   }).join('')
-    + `<button data-c="__region" class="${state.cat==='__region'?'on':''}" title="使用者设置的地区新闻（省/市），在设置里添加">地区新闻</button>`
-    + `<button data-c="__top" class="${state.cat==='__top'?'on':''}" title="全部源按阅读/评论/热度合并排序">总排行</button>`;
-  box.querySelectorAll('button').forEach(b=>b.onclick=()=>{
-    state.cat=b.dataset.c; renderCats(); renderSidebar(); render();
+    + (regionVisible() ? `<button data-c="__region" class="${state.cat==='__region'?'on':''}" title="使用者设置的本地（省/市），在设置里添加；可在 设置→分类管理 隐藏/删除">本地</button>` : '')
+    + `<button data-c="__top" class="${state.cat==='__top'?'on':''}" title="全部源按阅读/评论/热度合并排序">总排行</button>`
+    + `<span id="catHideDrop" style="display:none;flex:none;align-self:center;padding:2px 10px;border-radius:8px;font-size:12px;color:#fff;background:#e04438;opacity:.85">🚫 松手隐藏该分类</span>`
+    + `<span id="catDelDrop" style="display:none;flex:none;align-self:center;padding:2px 10px;border-radius:8px;font-size:12px;color:#fff;background:#7a1f1f;opacity:.85;margin-left:8px">🗑 松手删除该分类</span>`;
+  box.querySelectorAll('button').forEach(b=>{
+    b.onclick=e=>{
+      const mvBtn=e.target.closest&&e.target.closest('[data-cmv]');
+      if(mvBtn){ e.preventDefault(); e.stopPropagation(); moveCatStep(b.dataset.c,parseInt(mvBtn.dataset.cmv,10)); return; }
+      state.cat=b.dataset.c; state.view='all'; state.layout='board'; renderCats(); renderSidebar(); render();   // 点分类立即切到该分类的总览看板
+    };
   });
 }
 
@@ -658,7 +1729,7 @@ function render(){
   const agg=state.view==='all';
   const isTop=state.cat==='__top', isRegion=state.cat==='__region';
   // 标题
-  if(agg){ const cn=isTop?'（总排行）':(isRegion?'（地区新闻）':(state.cat==='全部'?'':' · '+state.cat));
+  if(agg){ const cn=isTop?'（总排行）':(isRegion?'（本地）':(state.cat==='全部'?'':' · '+state.cat));
     $('#viewTitle').textContent='聚合热榜'+cn;
     const ok=(isTop?enabled():enabledInCat()).filter(s=>((state.data[s.id]||{}).items||[]).length);
     const n=ok.reduce((a,s)=>a+(state.data[s.id].items.length),0);
@@ -670,6 +1741,8 @@ function render(){
     $('#viewSub').textContent=d.ts?'更新于 '+fmtTime(d.ts):''; }
   const layBox=$('#segLayout');
   if(layBox) layBox.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.v===state.layout));
+  const fitBtn=$('#btnFit');
+  if(fitBtn) fitBtn.style.display=(state.layout==='board')?'':'none';
   c.classList.toggle('list-mode', state.layout==='list');
   $('#navAll').classList.toggle('on',state.view==='all');
   $('#navFav').classList.toggle('on',state.view==='fav');
@@ -677,21 +1750,79 @@ function render(){
 
   c.innerHTML='';
   const items=currentList();
+  /* V7.9.3：「推广」分类 → 推荐页（温情文案 + 可定制广告位） */
+  if(state.cat==='推广'){ renderAd(c); return; }
+  // V6.9：GitHub 简介懒翻译 + 整页标题翻译（异步，不阻塞渲染；完成后自动重渲染）
+  setTimeout(()=>{ try{ translateGh(items); }catch(e){} },60);
+  setTimeout(()=>{ try{ collectPageTr(items); }catch(e){} },120);
+  setTimeout(()=>{ try{ collectTitleTr(items); }catch(e){} },180);
 
-  // 失败源提示
+  // 失败源提示（V7.8：加「查看详情」展开完整清单）
   if(agg){
-    if(state.autoHidden&&state.autoHidden.length&&(!state.autoHiddenAt||Date.now()-state.autoHiddenAt<=4000)){
-      const bar=el('div','err-bar',`<span>🛰 本次启动有 ${state.autoHidden.length} 个源没抓到数据，已自动隐藏：${esc(state.autoHidden.slice(0,4).map(h=>h.name).join('、'))}${state.autoHidden.length>4?' 等':''}</span><button>恢复显示</button>`);
-      bar.querySelector('button').onclick=restoreHidden;
+    /* V7.9：通知默认显示 10 秒后自动关闭（设置里 3~20 秒可调，0=不通知） */
+    const _nsec=(()=>{ let n=parseInt(state.cfg.settings.notifySec,10); return isNaN(n)?10:Math.max(0,Math.min(20,n)); })();
+    if(state.autoHidden&&state.autoHidden.length&&_nsec>0&&!state._notifyClosed&&(!state.autoHiddenAt||Date.now()-state.autoHiddenAt<=_nsec*1000)){
+      const bar=el('div','err-bar',`<span>🛰 本次启动有 ${state.autoHidden.length} 个源没抓到数据，已自动隐藏：${esc(state.autoHidden.slice(0,4).map(h=>h.name).join('、'))}${state.autoHidden.length>4?' 等':''}</span><span class="eb-btns"><button class="eb-copy">复制</button><button class="eb-more">查看详情</button><button class="eb-retry">重试</button><button class="eb-x" title="关闭通知">✕</button></span>`);
+      bar.querySelector('.eb-copy').onclick=()=>copyText(
+        '本次启动抓取失败的源：\n'+state.autoHidden.map(h=>h.name+'：启动时没抓到数据').join('\n'));
+      const rbtn=bar.querySelector('.eb-retry');
+      rbtn.onclick=()=>{
+        const list=state.cfg.sources.filter(s=>state.autoHidden.some(h=>h.id===s.id));
+        if(!list.length) return toast('没有可重试的源');
+        list.forEach(s=>{ s.enabled=true; });
+        toast('正在重试 '+list.length+' 个源…'); loadSources(list,true);
+      };
+      const xbtn=bar.querySelector('.eb-x');
+      if(xbtn) xbtn.onclick=()=>{ clearTimeout(state._ahT); state.autoHiddenAt=0; state._notifyClosed=true; state._errClosed=true;
+        const nx=bar.nextElementSibling; if(nx&&nx.classList.contains('err-list')) nx.remove(); bar.remove(); };
+      const mb=bar.querySelector('.eb-more');
+      if(mb) mb.onclick=()=>{
+        const old=bar.nextElementSibling;
+        if(old && old.classList.contains('err-list')){ old.remove(); mb.textContent='查看详情'; return; }
+        const p=el('div','err-list');
+        p.innerHTML=state.autoHidden.map(h=>`<div class="er"><span class="en" title="${esc(h.name||'')}">${esc(h.name||'')}</span><span class="em">启动时没抓到数据，已自动隐藏</span></div>`).join('');
+        c.insertBefore(p, bar.nextSibling);
+        mb.textContent='收起 ▴';
+      };
       c.appendChild(bar);
       clearTimeout(state._ahT);
-      state._ahT=setTimeout(()=>render(),4100);   // 4 秒后自动关闭
+      state._ahT=setTimeout(()=>{ if(!state._notifyClosed) render(); },_nsec*1000+100);   // 到时自动关闭
     }
     const errs=enabled().filter(s=>(state.data[s.id]||{}).error);
-    if(state.cfg.settings.showOnlyOk && errs.length){
-      const bar=el('div','err-bar',`<span>⚠ ${esc(errs.slice(0,4).map(s=>s.name).join('、'))}${errs.length>4?' 等':''} 暂时取不到数据，已自动隐藏</span><button>重试</button>`);
-      bar.querySelector('button').onclick=()=>loadSources(errs,true);
+    /* M8.1：通知关闭（notifySec=0）时，这条粉色提示也不弹 */
+    if(state.cfg.settings.showOnlyOk && errs.length && !state._errClosed && _nsec>0){
+      const bar=el('div','err-bar',`<span>⚠ ${esc(errs.slice(0,4).map(s=>s.name).join('、'))}${errs.length>4?' 等':''} 暂时取不到数据，已自动隐藏</span><span class="eb-btns"><button class="eb-copy">复制</button><button class="eb-more">查看详情</button><button class="eb-retry">重试</button><button class="eb-x" title="关闭通知">✕</button></span>`);
+      bar.querySelector('.eb-copy').onclick=()=>copyText(
+        '抓取失败的源：\n'+errs.map(s=>s.name+'：'+String((state.data[s.id]||{}).error||'抓取失败')).join('\n'));
+      bar.querySelector('.eb-retry').onclick=()=>{ state._errClosed=false; loadSources(errs,true); };
+      /* V7.9.3：点 ✕ 记进本次运行状态——换分类/重渲染/自动刷新都不再弹 */
+      bar.querySelector('.eb-x').onclick=()=>{ clearTimeout(state._ebT2); state._errClosed=true;
+        const nx=bar.nextElementSibling; if(nx&&nx.classList.contains('err-list')) nx.remove(); bar.remove(); };
+      const mb=bar.querySelector('.eb-more');
+      if(mb) mb.onclick=()=>{
+        const old=bar.nextElementSibling;
+        if(old && old.classList.contains('err-list')){ old.remove(); mb.textContent='查看详情'; armClose(); return; }
+        clearTimeout(state._ebT2);
+        const p=el('div','err-list');
+        p.innerHTML=errs.map(s=>{
+          const msg=esc(String((state.data[s.id]||{}).error||'').slice(0,90));
+          return `<div class="er"><span class="en" title="${esc(s.name)}">${esc(s.name)}</span><span class="em" title="${msg}">${msg||'抓取失败'}</span><button data-a="retry" data-id="${esc(s.id)}">重试</button><button data-a="hide" data-id="${esc(s.id)}">隐藏</button></div>`;
+        }).join('');
+        p.onclick=e=>{
+          const b=e.target.closest('button'); if(!b) return;
+          const src=state.cfg.sources.find(x=>x.id===b.dataset.id); if(!src) return;
+          if(b.dataset.a==='retry'){ loadSources([src],true); toast('正在重试「'+src.name+'」…'); }
+          else{ src.enabled=false; saveCfg(); renderSidebar(); render();
+            toast('已隐藏「'+src.name+'」，可在「设置 → 新闻源」重新打开'); }
+        };
+        c.insertBefore(p, bar.nextSibling);
+        mb.textContent='收起 ▴';
+      };
       c.appendChild(bar);
+      /* V7.9：通知条默认 10 秒后自动关闭（展开详情时暂停计时，收起后重新计时） */
+      const closeBar=()=>{ const nx=bar.nextElementSibling; if(nx&&nx.classList.contains('err-list')) nx.remove(); if(bar.parentNode) bar.remove(); };
+      const armClose=()=>{ clearTimeout(state._ebT2); if(_nsec>0) state._ebT2=setTimeout(closeBar,_nsec*1000); };
+      armClose();
     }
   }
   if(state.view==='fav'&&!items.length&&!state.filter){
@@ -704,7 +1835,7 @@ function render(){
     const set=state.cfg.settings.region||'';
     c.innerHTML=`<div class="empty"><div class="big">📍</div>${set
       ?('地区「'+esc(set)+'」暂时没抓到新闻，点右上角刷新试试')
-      :'还没有设置地区<br>去「设置 → 通用 → 地区新闻」填省份或城市，<br>如「广东」或「广东 广州」'}<br><br><button class="mini primary" id="goRegion">去设置地区</button></div>`;
+      :'还没有设置地区<br>去「设置 → 通用 → 本地」填省份或城市，<br>如「广东」或「广东 广州」'}<br><br><button class="mini primary" id="goRegion">去设置地区</button></div>`;
     const g=$('#goRegion'); if(g) g.onclick=()=>openModal('general');
     return;
   }
@@ -733,32 +1864,201 @@ function render(){
       return `<section class="bcard">
         <div class="bhead" data-sid="${esc(s.id)}" title="点击只看该源">
           <span class="bdot"></span><span class="bnm">${esc(s.name)}</span>
-          <span class="bbadge">${esc(srcCat(s))}</span><span class="bcnt">${per} 条</span></div>
+          <span class="bbadge">${esc(catLabel(s))}</span><span class="bcnt">${per} 条</span></div>
         <div class="bbody">${fm.slice(0,per).map((it,i)=>`
         <div class="bitem" title="${esc(it.title)}" data-url="${esc(it.url)}" data-tt="${esc(it.title)}"
              data-src="${esc(s.name)}" data-ht="${esc(it.heatText||'')}">
           <span class="rk ${i<3?'t'+(i+1):''}">${i+1}</span>
-          <span class="bt">${esc(it.title)}</span>
+          <span class="bt${tTrHTML(it)?' hast':''}">${trTitleHTML(it)}${tTrHTML(it)}</span>
           ${it.heatText?`<span class="bh">${esc(it.heatText)}</span>`:''}
         </div>`).join('') || '<div class="bempty">暂无内容</div>'}</div>
         <div class="bfoot" data-sid="${esc(s.id)}" title="查看该源全部新闻">浏览更多 →</div>
       </section>`;
     }).join('');
     c.appendChild(g);
-    g.querySelectorAll('.bhead,.bfoot').forEach(h=>h.onclick=()=>{
-      state.view=h.dataset.sid; renderSidebar(); render();
-    });
-    g.querySelectorAll('.bitem').forEach(n=>{
-      const it={title:n.dataset.tt,url:n.dataset.url,srcName:n.dataset.src,heatText:n.dataset.ht};
-      n.onclick=()=>{ if(n.dataset.url){ pushHistory(it); window.open(n.dataset.url,'_blank'); } };
-      n.oncontextmenu=e=>{ e.preventDefault();
-        if(navigator.clipboard) navigator.clipboard.writeText(it.title).then(()=>toast('已复制标题')); };
-    });
+    layoutBoard(g); bindBoardResize(g);
+    /* V8.0.0 流畅度：整块看板只挂 2 个委托监听（原先每个条目单独绑定，120+ 面板 × 15 条要挂上千次） */
+    g.onclick=e=>{
+      const h=e.target.closest&&e.target.closest('.bhead,.bfoot');
+      if(h&&h.dataset.sid){ state.view=h.dataset.sid; renderSidebar(); render(); return; }
+      const n=e.target.closest&&e.target.closest('.bitem');
+      if(n&&n.dataset.url){ pushHistory({title:n.dataset.tt,url:n.dataset.url,srcName:n.dataset.src,heatText:n.dataset.ht});
+        window.open(n.dataset.url,'_blank'); }
+    };
+    g.oncontextmenu=e=>{ const n=e.target.closest&&e.target.closest('.bitem'); if(!n) return;
+      e.preventDefault(); if(navigator.clipboard) navigator.clipboard.writeText(n.dataset.tt||'').then(()=>toast('已复制标题')); };
   }else{
     // 单源视图：紧凑列表（标题两行完整显示）
     const box=el('div','rows'); box.innerHTML=items.map(it=>rowHTML(it,false)).join(''); c.appendChild(box);
   }
   bind(c);
+}
+
+/* ---------------- V7.9.7：看板尺寸（列数 / 行数 / 拖边缘调宽高 / 一键自适应） ---------------- */
+const BOARD_GAP=18;
+function boardOpt(){
+  const S=(state.cfg&&state.cfg.settings)||{};
+  return {
+    cols:Math.max(0,Math.min(12,parseInt(S.boardCols,10)||0)),
+    rows:Math.max(1,Math.min(6,parseInt(S.boardRows,10)||2)),
+    w:Math.max(0,parseInt(S.boardW,10)||0),
+    h:Math.max(0,parseInt(S.boardH,10)||0)
+  };
+}
+function boardAutoCols(g){
+  const host=document.getElementById('content')||(g&&g.parentElement);
+  const w=((host&&host.clientWidth)||window.innerWidth)-26;
+  /* 每列至少给 240px，窗口越宽列越多，最多 12 列 */
+  return Math.max(2,Math.min(12,Math.floor((w+BOARD_GAP)/(240+BOARD_GAP))));
+}
+function boardAvailH(g){
+  const top=g.getBoundingClientRect().top;
+  const pl=document.getElementById('player');
+  const pb=(pl&&pl.classList.contains('on'))?66:0;
+  return Math.max(260,window.innerHeight-top-22-pb);
+}
+/* 把列数、列宽、卡片高度应用到整块看板；尺寸统一，所以「调一个 = 全同步」 */
+function layoutBoard(g){
+  if(!g) return;
+  const o=boardOpt();
+  const cols=o.cols||boardAutoCols(g);
+  g.style.setProperty('--bcols',cols);
+  g.style.gridTemplateColumns=o.w?('repeat('+cols+','+o.w+'px)'):('repeat('+cols+',minmax(0,1fr))');
+  let hh=o.h;
+  if(!hh){
+    hh=Math.floor((boardAvailH(g)-BOARD_GAP*(o.rows-1))/o.rows);
+    hh=Math.max(180,Math.min(hh,1400));
+  }
+  g.style.setProperty('--bcardh',hh+'px');
+}
+/* 给每张卡片挂右侧（改宽）/ 底部（改高）拖拽条；拖动时所有板块一起变 */
+function bindBoardResize(g){
+  if(!g) return;
+  g.querySelectorAll('.bcard').forEach(card=>{
+    if(card.querySelector('.brz-r')) return;
+    const r=document.createElement('span'); r.className='brz brz-r'; r.dataset.dir='r';
+    const b=document.createElement('span'); b.className='brz brz-b'; b.dataset.dir='b';
+    card.appendChild(r); card.appendChild(b);
+  });
+  if(g.dataset.rz) return;
+  g.dataset.rz='1';
+  g.addEventListener('mousedown',function(e){
+    const hd=e.target.closest&&e.target.closest('.brz');
+    if(!hd) return;
+    e.preventDefault(); e.stopPropagation();
+    const dir=hd.dataset.dir, card=hd.closest('.bcard');
+    if(!card) return;
+    const S=state.cfg.settings, r0=card.getBoundingClientRect();
+    const cols=parseInt(g.style.getPropertyValue('--bcols'),10)||1;
+    const x0=e.clientX, y0=e.clientY;
+    const w0=Math.round(r0.width), h0=Math.round(r0.height);
+    let lastW=w0, lastH=h0;
+    document.body.classList.add('rb-resizing', dir==='r'?'col-resize':'row-resize');
+    const mv=function(ev){
+      if(dir==='r'){
+        lastW=Math.max(200,Math.min(1400,Math.round(w0+(ev.clientX-x0))));
+        g.style.gridTemplateColumns='repeat('+cols+','+lastW+'px)';
+      }else{
+        lastH=Math.max(160,Math.min(1600,Math.round(h0+(ev.clientY-y0))));
+        g.style.setProperty('--bcardh',lastH+'px');
+      }
+    };
+    const up=function(){
+      document.removeEventListener('mousemove',mv);
+      document.removeEventListener('mouseup',up);
+      document.body.classList.remove('rb-resizing','col-resize','row-resize');
+      if(Math.abs((dir==='r'?lastW-w0:lastH-h0))<3) return;   /* 只是点了一下，不保存 */
+      if(dir==='r') S.boardW=lastW; else S.boardH=lastH;
+      saveCfg();
+      toast((dir==='r'?('列宽 '):('高度 '))+ (dir==='r'?lastW:lastH) +'px，所有板块已同步');
+    };
+    document.addEventListener('mousemove',mv);
+    document.addEventListener('mouseup',up);
+  });
+  /* 双击卡片标题栏 = 该板块单独铺满（再双击还原） */
+  g.querySelectorAll('.bhead').forEach(h=>{
+    h.addEventListener('dblclick',function(ev){
+      ev.stopPropagation();
+      const card=h.closest('.bcard'); if(!card) return;
+      const solo=card.classList.toggle('bsolo');
+      g.classList.toggle('has-solo',solo);
+      if(solo){
+        card.style.setProperty('--bcardh',(boardAvailH(g))+'px');
+        card.style.gridColumn='1 / -1';
+      }else{
+        card.style.removeProperty('--bcardh');
+        card.style.removeProperty('grid-column');
+        layoutBoard(g);
+      }
+    });
+  });
+}
+/* 一键自适应：清掉手动宽高，按窗口重新算列宽和高度，铺满整屏 */
+function boardAutoFit(){
+  const S=state.cfg.settings;
+  S.boardW=0; S.boardH=0; S.boardCols=0;
+  saveCfg(); render();
+  requestAnimationFrame(()=>{ layoutBoard(document.querySelector('#content .bgrid')); });
+  toast('已自适应铺满屏幕');
+}
+window.addEventListener('resize',()=>{ const g=document.querySelector('#content .bgrid'); if(g) layoutBoard(g); });
+
+/* ---------------- V7.9.3：推广 · 推荐页 ---------------- */
+function adCfg(){
+  const s=(state.cfg&&state.cfg.settings)||{};
+  return {
+    style: s.adStyle||'card',
+    warm: s.adWarm||'你的支持，是我一直更新下去的最大动力 ❤',
+    sub: s.adWarmSub||'如果这里的内容帮到了你，也欢迎把这块位置留给值得被看见的产品。',
+    title: s.adTitle||'作者其他软件 · 美拍姿势库（安卓 APK）',
+    desc: s.adDesc||'1700+ 宫格图片，拒绝拍照尴尬，记录每一份美好。',
+    url: s.adUrl||'https://pan.baidu.com/s/5gZ0hq4QQPHVSmFj_XYwnnA',
+    contact: s.adContact||'Q&V：460275097',
+  };
+}
+function renderAd(c){
+  const a=adCfg();
+  const head=`<div class="ad-hero">
+      <div class="ad-hero-t">${esc(a.warm)}</div>
+      <div class="ad-hero-s">${esc(a.sub)}</div>
+    </div>`;
+  const contact=`<div class="ad-foot">
+      <span class="ad-qv" id="adQv" title="点击复制">${esc(a.contact)}</span>
+      <span class="ad-tip">推广合作 / 展示形式可定制：设置 → 账号</span>
+    </div>`;
+  if(a.style==='banner'){
+    c.innerHTML=`<div class="adwrap">${head}
+      <div class="ad-banner" data-url="${esc(a.url)}">
+        <span class="ad-tag">AD</span>
+        <span class="ad-bn-t">${esc(a.title)}</span>
+        <span class="ad-bn-d">${esc(a.desc)}</span>
+        <span class="ad-bn-go">去看看 →</span>
+      </div>${contact}</div>`;
+  }else if(a.style==='row'){
+    c.innerHTML=`<div class="adwrap">${head}
+      <div class="rows"><div class="row ad-row" data-url="${esc(a.url)}">
+        <span class="ad-tag">AD</span>
+        <span class="rt">${esc(a.title)}<span class="rn">${esc(a.desc)}</span></span>
+        <span class="rb-go">打开 →</span>
+      </div></div>${contact}</div>`;
+  }else{
+    c.innerHTML=`<div class="adwrap">${head}
+      <div class="ad-card" data-url="${esc(a.url)}">
+        <div class="ad-card-hd"><span class="ad-tag">AD · 推广</span><span class="ad-card-badge">作者作品</span></div>
+        <div class="ad-card-t">${esc(a.title)}</div>
+        <div class="ad-card-d">${esc(a.desc)}</div>
+        <div class="ad-card-go">点击下载 →</div>
+      </div>${contact}</div>`;
+  }
+  c.querySelectorAll('[data-url]').forEach(n=>{
+    n.onclick=()=>{ const u=n.dataset.url; if(!u) return;
+      pushHistory({title:adCfg().title,url:u,srcName:'推广'});
+      window.open(u,'_blank'); };
+  });
+  const qv=c.querySelector('#adQv');
+  if(qv) qv.onclick=()=>copyText(adCfg().contact);
+  $('#viewTitle').textContent='推广';
+  $('#viewSub').textContent='推荐 · 合作';
 }
 
 function bind(root){
@@ -966,7 +2266,13 @@ $('#pRate').oninput=e=>{
 };
 
 /* ---------------- 设置面板 ---------------- */
-function openModal(tab){ state.tab=tab||'general'; $('#mask').classList.add('on'); renderModal(); }
+function openModal(tab){
+  state.tab=tab||'general';
+  $('#mask').classList.add('on');
+  renderModal();
+  /* V7.9.4：账号态决定「推广位」设置块是否渲染，未知时补一次再重画 */
+  if(!state.acct.loaded) acctRefresh().then(()=>{ if(state.tab==='general'||state.tab==='account') renderModal(); });
+}
 function closeModal(){ $('#mask').classList.remove('on'); state.addOpen=false; }
 $('#mClose').onclick=closeModal;
 $('#mask').onclick=e=>{ if(e.target.id==='mask') closeModal(); };
@@ -974,10 +2280,236 @@ $('#mTabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{ state.tab=b.da
 $('#btnSet').onclick=()=>openModal('general');
 $('#btnSet2').onclick=()=>openModal('general');
 $('#btnAdd').onclick=()=>{ state.addOpen=true; openModal('sources'); };
+$('#btnFb').onclick=()=>openModal('feedback');
+$('#btnTr').onclick=e=>{ e.stopPropagation(); toggleTrPop(); };
 
 function setS(k,v){ state.cfg.settings[k]=v; saveCfg(); applyLook(); renderModal(); render(); renderSidebar();
   // 全局每源条数：同步到所有源（单个源之后仍可在「新闻源」里单独改）并立即重新抓取生效
   if(k==='perSource'){ state.cfg.sources.forEach(s=>{ s.count=v; }); saveCfg(); refreshAll(true); } }
+
+const APP_VER='V8.0.2';
+/* V7.7：单窗口守卫——重复双击图标再开窗口时，旧窗口自动聚焦、新窗口自动关闭 */
+(function(){
+  try{
+    const ch=new BroadcastChannel('rebang-single');
+    const myId=Date.now()+':'+Math.random().toString(36).slice(2);
+    ch.onmessage=ev=>{
+      const d=ev.data||{};
+      if(d.type==='hello'){
+        ch.postMessage({type:'alive',to:d.id});
+        try{ window.focus(); }catch(e){}
+      }else if(d.type==='alive' && d.to===myId){
+        setTimeout(()=>{ try{ window.close(); }catch(e){} },150);
+        setTimeout(()=>{ try{ if(!window.closed) document.title='⚠ 热榜助手已在另一窗口运行，请关闭本窗口'; }catch(e){} },900);
+      }
+    };
+    ch.postMessage({type:'hello',id:myId});
+  }catch(e){}
+})();   /* 手机/网页版版本号（M 线，每次改动自动递增） */
+/* ---------------- M8.1：建议/反馈上云（腾讯云 CloudBase） ----------------
+   提交/列表/审核全部走本地服务 /api/feedback/*；
+   管理员 = 登录账号 460275097@qq.com，登录后在审核台「通过/拒绝/删除」。 */
+const FEEDBACK_ADMIN_EMAIL='460275097@qq.com';
+const fbBad=/(法轮|六四|共产[党]|台独|藏独|疆独|赌博|博彩|色情|裸聊|约炮|代开发票|办证|毒品|冰毒|枪支|炸弹|刷单|外挂|黑客攻击)/;
+function fbGuard(text){
+  const t=(text||'').trim();
+  if(!t) return '内容不能为空';
+  if(t.length>300) return '最多 300 字';
+  if(fbBad.test(t)) return '内容含违规词，无法提交';
+  return '';
+}
+const fbIsAdmin=()=> !!(state.acct&&state.acct.logged&&state.acct.user&&
+                        (state.acct.user.email||'').toLowerCase()===FEEDBACK_ADMIN_EMAIL);
+async function fbInsert(row){
+  const r=await api('/api/feedback/submit',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(row)});
+  if(!r.ok) throw new Error(r.error||'提交失败');
+}
+async function fbLoad(mode){   // mode: 'public' 所有人 | 'admin' 审核台 | 'mine' 我的
+  const r=await api('/api/feedback/list?mode='+encodeURIComponent(mode));
+  if(!r.ok) throw new Error(r.error||'加载失败');
+  return {items:r.items||[], isAdmin:!!r.isAdmin};
+}
+
+/* ---------------- M8.0：账号与云同步（腾讯云 CloudBase） ----------------
+   登录/注册/找回密码走本地服务 /api/auth/*；配置同步走 /api/cloud/*。
+   未登录时设置只存本地；登录后保存配置由后端自动上传云端并绑定账号。 */
+state.acct={loaded:false, logged:false, user:null, admin:false, hasCloudCfg:false, fresh:false, mode:'login', busy:false, cd:0};
+
+async function acctRefresh(){
+  try{ const r=await api('/api/auth/me');
+    state.acct.logged=!!r.logged; state.acct.user=r.user||null; state.acct.hasCloudCfg=!!r.hasCloudCfg;
+    state.acct.admin=!!r.admin;
+    state.acct.fresh=!!r.fresh;
+  }catch(e){ state.acct.logged=false; state.acct.admin=false; }
+  state.acct.loaded=true;
+  return state.acct;
+}
+function acctNick(u){ return (u&&(u.nickname||''))||(u&&(u.email||'').split('@')[0])||''; }
+
+/* 登录成功后 / 启动已登录时：静默处理云端配置（不再弹任何确认对话框）
+   · 本机全新安装（还没有本地配置）→ 直接静默恢复云端配置
+   · 本机已有本地配置 → 一律保留本地、绝不覆盖；需要时到「设置→账号」点「从云端恢复」 */
+async function acctAskCloudCover(){
+  if(!state.acct.logged||!state.acct.hasCloudCfg) return;
+  try{ if(sessionStorage.getItem('hb_cloud_asked')) return; }catch(e){}
+  try{ sessionStorage.setItem('hb_cloud_asked','1'); }catch(e){}
+  if(!state.acct.fresh) return;
+  await cloudRestore(true);
+}
+async function cloudRestore(quiet){
+  const r=await api('/api/cloud/pull',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+  if(r.ok&&r.empty){ if(!quiet) toast('云端还没有保存过配置'); return; }
+  if(r.ok&&r.settings){
+    /* V7.9.4：云端配置不含推广位（作者唯一维护），恢复后把本地缓存的推广位补回来 */
+    const adc=adCached();
+    const keepOpen=state.cfg.settings.openMode;      /* V8.0.2：窗口形式只听本机的 */
+    state.cfg.settings=r.settings; state.cfg.sources=r.sources||state.cfg.sources;
+    if(keepOpen) state.cfg.settings.openMode=keepOpen;
+    AD_KEYS.forEach(k=>{ if(adc[k]) state.cfg.settings[k]=adc[k]; });
+    state.favs=r.favorites||state.favs;   /* 收藏随云端恢复；浏览记录不动 */
+    refreshCats(); applyLook(); renderCats(); renderSidebar(); render();
+    if(!quiet) toast('已从云端恢复配置');
+  }else if(!quiet){ toast('恢复失败：'+(r.error||'未知错误')); }
+}
+async function cloudPush(){
+  const r=await api('/api/cloud/push',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+  toast(r.ok?'本地设置已上传云端':'上传失败：'+(r.error||'未知错误'));
+}
+async function acctSendCode(btn,email,purpose){
+  if(state.acct.cd>0) return;
+  if(!email){ toast('请先填写邮箱'); return; }
+  btn.disabled=true; btn.textContent='发送中…';
+  try{
+    const r=await api('/api/auth/sendcode',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({email:email,purpose:purpose})});
+    if(!r.ok){ toast(r.error||'验证码发送失败'); btn.disabled=false; btn.textContent='获取验证码'; return; }
+    state.acct._vid=r.vid||'';
+    toast('验证码已发送到邮箱，请查收');
+    state.acct.cd=60;
+    btn.textContent='60s 后重发';
+    const t=setInterval(()=>{ state.acct.cd--;
+      if(state.acct.cd<=0){ clearInterval(t); btn.disabled=false; btn.textContent='获取验证码'; }
+      else btn.textContent=state.acct.cd+'s 后重发'; },1000);
+  }catch(e){ btn.disabled=false; btn.textContent='获取验证码'; toast('网络错误，请重试'); }
+}
+function acctEye(btn,inp){
+  const show=inp.type==='password';
+  inp.type=show?'text':'password';
+  btn.textContent=show?'🙈':'👁';
+}
+
+/* V7.9.4：推广位设置块——只有作者（管理员）登录时才出现。
+   普通用户完全看不到这块内容，也就无从修改；作者改完发布到中心服务器，
+   所有人下次打开软件自动同步到最新文案与样式。 */
+function adSetBlock(S){
+  if(!(state.acct && state.acct.admin)) return '';
+  return `
+      <div class="field" id="adSetBox"><div class="lb">推广位（推荐页）<span style="margin-left:6px;font-size:11px;padding:1px 6px;border-radius:6px;background:rgba(232,64,47,.1);color:#e8402f">仅作者可见</span>
+        <div class="hint">只有作者账号能改；点「发布到全网」后，所有用户的软件下次打开会自动更新成这里的内容</div></div>
+        <div class="ctl">
+          ${[['card','大卡片'],['banner','横幅'],['row','列表行']].map(([v,n])=>`<button class="pill ${(S.adStyle||'card')===v?'on':''}" data-k="adStyle" data-v="${v}">${n}</button>`).join('')}
+        </div>
+        <div style="margin-top:8px;display:grid;gap:6px">
+          <input id="adWarm" class="url" style="max-width:none" placeholder="推荐语（温情话术）" value="${esc(S.adWarm||'')}" spellcheck="false">
+          <input id="adTitle" class="url" style="max-width:none" placeholder="推广标题" value="${esc(S.adTitle||'')}" spellcheck="false">
+          <input id="adDesc" class="url" style="max-width:none" placeholder="推广说明" value="${esc(S.adDesc||'')}" spellcheck="false">
+          <input id="adUrl" class="url" style="max-width:none" placeholder="点击跳转链接" value="${esc(S.adUrl||'')}" spellcheck="false">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <input id="adContact" class="url" style="max-width:220px" placeholder="联系方式，如 Q&V：460275097" value="${esc(S.adContact||'')}" spellcheck="false">
+            <button class="pill" id="adSave">发布到全网</button><span id="adMsg" style="font-size:12px;opacity:.75"></span>
+          </div>
+        </div></div>`;
+}
+
+/* 绑定推广位设置块里的交互（只在作者登录、块存在时调用） */
+function bindAdBlock(B,S){
+  const box=B.querySelector('#adSetBox');
+  if(!box) return;
+  // 展示形式（大卡片 / 横幅 / 列表行）
+  box.querySelectorAll('[data-k="adStyle"]').forEach(btn=>btn.onclick=()=>{
+    S.adStyle=btn.dataset.v; saveCfg();
+    box.querySelectorAll('[data-k="adStyle"]').forEach(x=>x.classList.toggle('on',x.dataset.v===S.adStyle));
+    if(state.cat==='推广') render();
+  });
+  const adSave=box.querySelector('#adSave');
+  if(!adSave) return;
+  adSave.onclick=async()=>{
+    const g=id=>{ const n=B.querySelector(id); return n?n.value.trim():''; };
+    const msg=B.querySelector('#adMsg');
+    S.adWarm=g('#adWarm')||'你的支持，是我一直更新下去的最大动力 ❤';
+    S.adWarmSub=S.adWarmSub||'';
+    S.adTitle=g('#adTitle')||'作者其他软件 · 美拍姿势库（安卓 APK）';
+    S.adDesc=g('#adDesc')||'1700+ 宫格图片，拒绝拍照尴尬，记录每一份美好。';
+    S.adUrl=g('#adUrl')||'https://pan.baidu.com/s/5gZ0hq4QQPHVSmFj_XYwnnA';
+    S.adContact=g('#adContact')||'Q&V：460275097';
+    const ad={}; AD_KEYS.forEach(k=>{ ad[k]=S[k]||''; });
+    saveCfg();
+    adSave.disabled=true; if(msg) msg.textContent='正在发布…';
+    try{
+      const r=await api(adBase()+'/api/ad',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ad})});
+      if(r&&r.ok){
+        try{ localStorage.setItem('hb_ad_v1',JSON.stringify(ad)); }catch(e){}
+        toast('已发布到全网，其他人下次打开自动更新');
+        if(msg) msg.textContent='已发布 ✓';
+      }else{
+        const er=(r&&r.error)||'发布失败';
+        toast(er); if(msg) msg.textContent=er;
+      }
+    }catch(e){ toast('发布失败：'+(e.message||'网络问题')); if(msg) msg.textContent='发布失败'; }
+    adSave.disabled=false;
+    if(state.cat==='推广') render();
+  };
+}
+
+/* V7.9.6：设置项说明统一「平时一行省略，鼠标移上去看全文」——这里给每个说明补原生 title，
+   触屏没有 hover，点一下就地展开（再点收起） */
+(function(){
+  const box=document.getElementById('mBody');
+  if(!box) return;
+  const fix=()=>{
+    box.querySelectorAll('.field .hint').forEach(h=>{
+      const t=(h.textContent||'').trim();
+      if(t && h.getAttribute('data-tip')!==t){ h.setAttribute('data-tip',t); h.title=t; }
+    });
+  };
+  fix();
+  if(window.MutationObserver) new MutationObserver(fix).observe(box,{childList:true,subtree:true});
+  box.addEventListener('click',ev=>{
+    const h=ev.target.closest && ev.target.closest('.hint');
+    if(h) h.classList.toggle('on');
+  });
+})();
+
+/* V8.0.2：给一个源挑多个分类（点分类按钮弹浮层，勾选即时保存，最多 4 个） */
+function openCatPick(anchor, s){
+  document.querySelectorAll('.catpick-pop').forEach(n=>n.remove());
+  const pop=el('div','catpick-pop');
+  const cats=catsOnly().filter(c=>c!=='全部'&&c!=='推广');
+  pop.innerHTML=`<div class="cph">勾选分类（可多选，最多 4 个）<br>源会同时出现在这些分类里</div>
+    <div class="cpb">${cats.map(c=>`<label><input type="checkbox" value="${esc(c)}"${catHas(s,c)?' checked':''}>${esc(c)}</label>`).join('')}</div>
+    <div class="cpf"><button class="mini" data-cancel="1">关闭</button></div>`;
+  document.body.appendChild(pop);
+  const r=anchor.getBoundingClientRect();
+  const pw=250, ph=Math.min(340, pop.offsetHeight||320);
+  pop.style.left=Math.max(8, Math.min(r.left, window.innerWidth-pw-8))+'px';
+  pop.style.top=Math.max(8, Math.min(r.bottom+6, window.innerHeight-ph-8))+'px';
+  const paint=()=>{
+    anchor.textContent=catLabel(s)+(srcCats(s).length>1?` +${srcCats(s).length-1}`:'')+' ▾';
+  };
+  pop.querySelectorAll('input').forEach(i=>i.onchange=()=>{
+    const sel=[...pop.querySelectorAll('input:checked')].map(x=>x.value);
+    if(!sel.length){ i.checked=true; toast('至少要保留一个分类'); return; }
+    if(sel.length>4){ i.checked=false; toast('一个源最多 4 个分类'); return; }
+    setSrcCats(s, sel); saveCfg(); renderCats(); renderSidebar(); render(); paint();
+  });
+  pop.querySelector('[data-cancel]').onclick=()=>pop.remove();
+  const close=ev=>{ if(!pop.contains(ev.target) && ev.target!==anchor){
+      pop.remove(); document.removeEventListener('mousedown',close,true); } };
+  setTimeout(()=>document.addEventListener('mousedown',close,true),0);
+}
+
 
 function renderModal(){
   $('#mTabs').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.t===state.tab));
@@ -985,16 +2517,26 @@ function renderModal(){
 
   if(state.tab==='general'){
     B.innerHTML=`
+      <div class="field"><div class="lb">字号<div class="hint">手机/电脑都生效，正文、标题、按钮同步缩放</div></div>
+        <div class="ctl">${[['0.9','小'],['1','标准'],['1.2','大'],['1.4','特大']].map(([v,t])=>`<button class="pill ${String(S.fontScale||1)==v?'on':''}" data-k="fontScale" data-v="${v}">${t}</button>`).join('')}</div></div>
       <div class="field"><div class="lb">每源条数<div class="hint">默认值，单个源可在「新闻源」里单独设置</div></div>
         <div class="ctl">${[10,20,30,50].map(n=>`<button class="pill ${S.perSource==n?'on':''}" data-k="perSource" data-v="${n}">${n}</button>`).join('')}</div></div>
       <div class="field"><div class="lb">看板每源条数<div class="hint">看板模式下每个源面板显示的条数</div></div>
         <div class="ctl">${[6,10,15,20,30].map(n=>`<button class="pill ${(+S.boardCount||15)==n?'on':''}" data-k="boardCount" data-v="${n}">${n}</button>`).join('')}</div></div>
-      <div class="field"><div class="lb">地区新闻<div class="hint">填省份或省市，如「广东」或「广东 广州」；留空关闭。保存后左侧出现「地区新闻」源</div></div>
+      <div class="field"><div class="lb">本地<div class="hint">填省份或省市，如「广东」或「广东 广州」；留空关闭。保存后左侧出现「本地」源</div></div>
         <div class="ctl"><input id="regionInput" class="url" style="max-width:260px" value="${esc(S.region||'')}"
           placeholder="例：广东 广州" spellcheck="false">
           <button class="pill" id="regionSave">保存地区</button></div></div>
       <div class="field"><div class="lb">自动刷新</div>
         <div class="ctl">${[0,5,10,20,30].map(n=>`<button class="pill ${S.autoRefresh==n?'on':''}" data-k="autoRefresh" data-v="${n}">${n?n+' 分钟':'关闭'}</button>`).join('')}</div></div>
+      <div class="field"><div class="lb">抓取失败通知<div class="hint">新闻源没抓到数据时，通知条显示几秒（3~20 秒，默认 10 秒自动关闭）；选「不通知」则完全不弹</div></div>
+        <div class="ctl">${[3,5,8,10,15,20,0].map(n=>`<button class="pill ${((S.notifySec===0||S.notifySec==='0')?0:((+S.notifySec)||10))==n?'on':''}" data-k="notifySec" data-v="${n}">${n===0?'不通知':n+' 秒'}</button>`).join('')}</div></div>
+      <div class="field"><div class="lb">英文标题翻译显示<div class="hint">英文新闻标题下方自动显示浅灰色中文翻译（末尾标「机翻」；本机离线引擎优先，未安装时走在线引擎）；GitHub 板块不参与；密钥在顶栏「翻译显示」里填写，仅存本机</div></div>
+        <div class="ctl">
+          <button class="pill ${S.titleTrans===true?'on':''}" data-k="titleTrans" data-v="1">开启</button>
+          <button class="pill ${S.titleTrans===false?'on':''}" data-k="titleTrans" data-v="0">关闭</button></div></div>
+      <div class="field"><div class="lb">离线翻译模型<div class="hint">Marian + CTranslate2 端侧模型（英→中，约 68MB）。下载一次后永久离线可用，英文标题瞬间出中文、不依赖网络也不消耗翻译额度；没下载时走在线引擎（偶尔限流会翻不全）。</div></div>
+        <div id="offBox" style="min-height:10px"><div style="font-size:12px;color:var(--sub)">读取状态…</div></div></div>
       <div class="field"><div class="lb">聚合排序</div>
         <div class="ctl">
           <button class="pill ${S.sortAgg!=='source'?'on':''}" data-k="sortAgg" data-v="heat">综合热度</button>
@@ -1003,10 +2545,11 @@ function renderModal(){
         <div class="ctl">
           <button class="pill ${S.closeAction!=='exit'?'on':''}" data-k="closeAction" data-v="tray">最小化到托盘</button>
           <button class="pill ${S.closeAction==='exit'?'on':''}" data-k="closeAction" data-v="exit">直接退出</button></div></div>
-      <div class="field"><div class="lb">窗口形式</div>
+      <div class="field"><div class="lb">窗口形式<div class="hint">默认「独立窗口」：像普通软件一样开一个没有地址栏的窗口，不会被浏览器标签页带走</div></div>
         <div class="ctl">
           <button class="pill ${S.openMode!=='browser'?'on':''}" data-k="openMode" data-v="app">独立窗口</button>
-          <button class="pill ${S.openMode==='browser'?'on':''}" data-k="openMode" data-v="browser">默认浏览器</button></div></div>
+          <button class="pill ${S.openMode==='browser'?'on':''}" data-k="openMode" data-v="browser">默认浏览器</button>
+          <span style="font-size:11px;color:var(--sub);white-space:nowrap">↑ 默认浏览器：方便用浏览器扩展插件翻译</span></div></div>
       <div class="field"><div class="lb">朗读语速</div>
         <div class="ctl">${[0.8,1,1.25,1.5,1.8].map(n=>`<button class="pill ${Math.abs((S.ttsRate||1.25)-n)<0.01?'on':''}" data-k="ttsRate" data-v="${n}">${n===1.25?'1.25':n.toFixed(1)}x</button>`).join('')}</div></div>
       <div class="field"><div class="lb">启动自动检测<div class="hint">每次打开软件先强制刷新全部源，没抓到数据的自动隐藏</div></div>
@@ -1016,16 +2559,41 @@ function renderModal(){
       <div class="field"><div class="lb">只显示可用源<div class="hint">取不到数据的源自动从首页隐藏</div></div>
         <div class="ctl">
           <button class="pill ${S.showOnlyOk?'on':''}" data-k="showOnlyOk" data-v="1">开启</button>
-          <button class="pill ${!S.showOnlyOk?'on':''}" data-k="showOnlyOk" data-v="0">关闭</button></div></div>`;
+          <button class="pill ${!S.showOnlyOk?'on':''}" data-k="showOnlyOk" data-v="0">关闭</button></div></div>
+      <div class="field"><div class="lb">站点 Cookie（高级）<div class="hint">JSON 格式：{"bilibili.com": "SESSDATA=xxx; ..."}。给需要登录/风控的站点带上你的 Cookie，仅保存在本机，按域名后缀匹配注入抓取</div></div>
+        <textarea id="ckJson" spellcheck="false" style="width:100%;height:92px;box-sizing:border-box;font:12px/1.5 Consolas,monospace;padding:8px;border:1px solid var(--line,#ddd);border-radius:8px;background:var(--card,#fff);color:var(--text,#222);resize:vertical;">${(S.cookies&&Object.keys(S.cookies).length)?JSON.stringify(S.cookies,null,1).replace(/</g,'\u003c'):''}</textarea>
+        <div style="margin-top:6px;display:flex;align-items:center;gap:10px;">
+          <button class="pill" id="ckSave">保存 Cookie</button><span id="ckMsg" style="font-size:12px;opacity:.75;"></span></div></div>`;
     B.querySelectorAll('.pill').forEach(b=>b.onclick=()=>{
       let v=b.dataset.v;
       if(['perSource','autoRefresh','boardCount'].includes(b.dataset.k)) v=parseInt(v,10);
       if(b.dataset.k==='ttsRate') v=parseFloat(v);
       if(b.dataset.k==='showOnlyOk') v=(v==='1');
       if(b.dataset.k==='startupCheck') v=(v==='1');
+      if(b.dataset.k==='titleTrans') v=(v==='1');
       setS(b.dataset.k,v);
     });
-    // 地区新闻：保存时动态维护 region_news 源
+    // V7.9.3：网页版地址（复制 + 跳转）
+    const wa2=B.querySelector('#webAddr2');
+    if(wa2) wa2.onclick=()=>{ copyText(WEB_URL); try{ window.open(WEB_URL,'_blank'); }catch(e){} };
+    // M5.8/V7.5：站点 Cookie 保存（JSON 校验，仅本机）
+    const ckB=B.querySelector('#ckSave');
+    if(ckB) ckB.onclick=()=>{
+      const ta=B.querySelector('#ckJson'), msg=B.querySelector('#ckMsg');
+      try{
+        const o=JSON.parse(ta.value||'{}');
+        if(!o||typeof o!=='object'||Array.isArray(o)) throw new Error('格式');
+        const clean={};
+        for(const k in o){ const key=String(k).trim().slice(0,64), val=String(o[k]||'').trim().slice(0,2000);
+          if(key&&val) clean[key]=val; }
+        S.cookies=clean; setS('cookies',clean);
+        if(msg){ msg.textContent='已保存 '+Object.keys(clean).length+' 项'; }
+        toast('Cookie 已保存');
+      }catch(e){
+        if(msg){ msg.textContent='JSON 格式错误，例：{"bilibili.com": "k=v; k2=v2"}'; }
+      }
+    };
+    // 本地：保存时动态维护 region_news 源
     const rbtn=B.querySelector('#regionSave');
     if(rbtn) rbtn.onclick=()=>{
       const inp=B.querySelector('#regionInput');
@@ -1034,17 +2602,193 @@ function renderModal(){
       const have=state.cfg.sources.find(s=>s.id==='region_news');
       if(!region){
         state.cfg.sources=state.cfg.sources.filter(s=>s.id!=='region_news');
-        saveCfg(); renderModal(); renderSidebar(); render(); toast('地区新闻已关闭'); return;
+        saveCfg(); renderModal(); renderSidebar(); render(); toast('本地已关闭'); return;
       }
       const q=encodeURIComponent(region);
-      const src={id:'region_news', name:'地区·'+region,
+      const src={id:'region_news', name:'本地·'+region,
         url:'https://news.so.com/ns?q='+q+'&pn=1', parser:'360news', sel:{},
         count:30, enabled:true, note:'360新闻·按地区聚合', search:'', cat:'综合'};
       if(have){ Object.assign(have, src); } else { state.cfg.sources.unshift(src); }
       saveCfg(); renderModal(); renderSidebar(); render();
-      toast('地区新闻已设置：'+region);
+      toast('本地已设置：'+region);
       loadSources([src], true);
     };
+    /* V7.9：离线翻译模型面板（下载 / 进度 / 删除 / 试翻） */
+    const offBox=B.querySelector('#offBox');
+    if(offBox){
+      const mb=n=>n>=1048576?(n/1048576).toFixed(1)+' MB':Math.round((n||0)/1024)+' KB';
+      let pv=null;
+      const stopPoll=()=>{ if(pv){ clearInterval(pv); pv=null; } };
+      const paint=(st)=>{
+        st=st||{};
+        const busy=(st.state==='downloading'||st.state==='unpacking');
+        let h='';
+        if(busy){
+          h=`<div style="display:flex;align-items:center;gap:10px">
+              <div style="flex:1;height:6px;background:var(--line,#e6e6e6);border-radius:99px;overflow:hidden">
+                <div style="width:${st.pct||0}%;height:100%;background:var(--blue,#2f6fed);transition:width .3s"></div></div>
+              <span style="flex:none;font-size:11.5px;color:var(--sub)">${st.pct||0}% · ${mb(st.got)} / ${mb(st.total)}</span></div>
+            <div style="font-size:11.5px;color:var(--sub);margin-top:5px">${esc(st.msg||'正在下载')}，可以关掉设置继续用，下完自动生效</div>`;
+        }else if(st.installed){
+          h=`<div style="display:flex;align-items:center;gap:8px;font-size:12.5px;flex-wrap:wrap">
+              <span style="color:#0e9f6e">✓ 已安装</span>
+              <span style="color:var(--sub)">${esc(st.engine||'')} · 占用 ${mb(st.size)}</span>
+              <button class="pill" id="offTest">试翻一句</button>
+              <button class="pill" id="offDel">删除模型</button></div>`;
+        }else{
+          h=`<div style="display:flex;align-items:center;gap:8px;font-size:12.5px;flex-wrap:wrap">
+              <button class="pill primary" id="offDl" ${st.runtime?'':'disabled title="当前程序缺少离线运行库"'}>下载离线模型（约 68MB）</button>
+              <span style="color:var(--sub)">${st.runtime?'未下载 · 现在走在线翻译':'当前程序缺少离线运行库，请用新版安装包'}</span></div>`;
+        }
+        if(st.state==='error') h+=`<div style="font-size:11.5px;color:#dc2626;margin-top:5px">${esc(st.msg||'下载失败')}</div>`;
+        offBox.innerHTML=h;
+        const dl=offBox.querySelector('#offDl');
+        if(dl) dl.onclick=()=>{
+          dl.disabled=true; dl.textContent='正在开始…';
+          api('/api/offline/download',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})
+            .then(r=>{ if(!r.ok){ toast(r.error||'无法开始下载'); paint(r.status||{}); return; } poll(); })
+            .catch(()=>{ toast('无法开始下载'); });
+        };
+        const del=offBox.querySelector('#offDel');
+        if(del) del.onclick=()=>{
+          if(!confirm('删除已下载的离线翻译模型？删除后英文标题会走在线翻译。')) return;
+          api('/api/offline/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})
+            .then(r=>{ paint(r.status||{}); toast('已删除离线模型'); }).catch(()=>toast('删除失败'));
+        };
+        const tb=offBox.querySelector('#offTest');
+        if(tb) tb.onclick=()=>{
+          tb.disabled=true; tb.textContent='翻译中…';
+          api('/api/translate',{method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({texts:['Global chipmakers race to expand advanced packaging capacity'],engine:'auto'})})
+            .then(r=>{ const m=(r&&r.map)||{}; const v=m[Object.keys(m)[0]]||'（没有结果）';
+              toast('离线译：'+v); tb.disabled=false; tb.textContent='试翻一句'; })
+            .catch(()=>{ tb.disabled=false; tb.textContent='试翻一句'; });
+        };
+        if(busy) poll(); else stopPoll();
+      };
+      const poll=()=>{
+        stopPoll();
+        pv=setInterval(()=>{
+          api('/api/offline/status').then(r=>{ paint(r.status||{}); }).catch(()=>{});
+        },800);
+      };
+      api('/api/offline/status').then(r=>paint(r.status||{}))
+        .catch(()=>{ offBox.innerHTML='<div style="font-size:12px;color:var(--sub)">状态读取失败</div>'; });
+    }
+  }
+
+  if(state.tab==='cert'){
+    B.innerHTML=`
+      <div class="field" style="display:block;align-items:flex-start;padding-top:2px;border-bottom:0">
+        <div class="lb" style="width:auto;font-size:14px">站点证书修复<div class="hint">抓取已内置证书容错，新闻采集不受影响；这里修的是浏览器等其它软件访问这些站点时的证书报错。下面列出检测到证书链异常的站点，可逐个处理，也可点「一键全部检测并安装」自动跑一遍（装入当前用户「中级证书颁发机构」，无需管理员权限）</div></div>
+      </div>
+      <div id="certBox" style="min-height:10px;margin-top:2px"><div style="font-size:12px;color:var(--sub)">加载中…</div></div>`;
+    /* V7.8.1 证书修复面板；V7.9.4：默认折叠（平时只显示一行摘要）+ 一键全部检测安装 */
+    const certBox=B.querySelector('#certBox');
+    if(certBox){
+      let certItems=[];
+      let certProg='';
+      const isOpen=()=>{ try{ const v=localStorage.getItem('hb_cert_open2'); return v===null?false:v==='1'; }catch(e){ return false; } };
+      const setOpen=v=>{ try{ localStorage.setItem('hb_cert_open2',v?'1':'0'); }catch(e){} };
+
+      const itemHtml=(it)=>{
+        const ch=it.chain||[];
+        const rows=ch.map((c,i)=>`<div style="display:flex;align-items:center;gap:6px;font-size:11.5px;padding:2px 0">
+          <span style="color:var(--sub);flex:none;width:44px">${c.selfSigned?'根证书':'第 '+i+' 级'}</span>
+          <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(c.subject||'')}">${esc(c.subject||'')}</span>
+          <span style="color:${c.installed?'#0e9f6e':(c.saved?'#d97706':'var(--sub)')};flex:none">${c.installed?'✓ 已安装':(c.saved?'已下载 · 未安装':'未下载')}</span></div>`).join('');
+        const need=ch.filter(c=>!c.selfSigned&&!c.installed).length;
+        return `<div style="border:1px solid var(--line);border-radius:8px;padding:7px 9px;margin-top:6px">
+          <div style="display:flex;align-items:center;gap:8px;font-size:12.5px;flex-wrap:wrap">
+            <b>${esc(it.host)}</b>
+            <span style="color:var(--sub);font-size:11px;flex:1;min-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(it.err||'')}">${esc((it.err||'').slice(0,54))}</span>
+            <button class="pill" data-a="probe" data-h="${esc(it.host)}">重新检测</button>
+            <button class="pill" data-a="install" data-h="${esc(it.host)}">下载并安装${need?('（'+need+' 级）'):''}</button>
+            <button class="pill" data-a="forget" data-h="${esc(it.host)}">忽略</button></div>
+          ${rows||'<div style="font-size:11.5px;color:var(--sub);margin-top:4px">尚未检测证书链，点「重新检测」获取该站点需要哪些证书</div>'}</div>`;
+      };
+
+      const paint=()=>{
+        const open=isOpen(), n=certItems.length;
+        const head=`<div class="cert-head" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <b style="font-size:12.5px">${n?('已发现 '+n+' 个站点证书链异常'):'暂未发现证书异常的站点'}</b>
+          <span style="font-size:11.5px;color:var(--sub);flex:1;min-width:120px">${esc(certProg||(open?'':'点「展开」查看明细'))}</span>
+          <button class="pill" id="certAll" ${n?'':'disabled'}>一键全部检测并安装</button>
+          <button class="pill" id="certTgl">${open?'收起':'展开'}</button>
+        </div>`;
+        const body = open ? `<div style="margin-top:6px">
+            ${certItems.map(itemHtml).join('')}
+            <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+              <input id="certHost" class="url" style="max-width:240px" placeholder="手动添加站点，如 www.gov.cn" spellcheck="false">
+              <button class="pill" id="certProbe">检测证书链</button></div>
+          </div>` : '';
+        certBox.innerHTML = head + body;
+
+        const tgl=certBox.querySelector('#certTgl');
+        if(tgl) tgl.onclick=()=>{ const o=isOpen(); setOpen(!o); if(!o) certProg=''; paint(); };
+        const all=certBox.querySelector('#certAll');
+        if(all) all.onclick=()=>fixAll(all);
+        certBox.querySelectorAll('[data-a]').forEach(bt=>bt.onclick=()=>{
+          const h=bt.dataset.h, a=bt.dataset.a;
+          if(a==='forget'){
+            api('/api/cert/forget',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({host:h})})
+              .then(r=>{ certItems=r.items||[]; paint(); });
+            return;
+          }
+          if(a==='install'){
+            bt.disabled=true; bt.textContent='安装中…';
+            api('/api/cert/install',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({host:h})})
+              .then(r=>{ toast(r.msg||(r.ok?'完成':'失败')); certItems=r.items||certItems; paint(); });
+            return;
+          }
+          probe(h);
+        });
+        const pb=certBox.querySelector('#certProbe');
+        if(pb) pb.onclick=()=>{ const h=(certBox.querySelector('#certHost').value||'').trim(); if(h) probe(h); };
+      };
+
+      const probe=(h)=>{
+        certProg='正在检测 '+h+' …'; paint();
+        api('/api/cert/chain',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({host:h})})
+          .then(r=>{ certProg=r.ok?(h+'：检测完成'):('检测失败：'+(r.error||'')); certItems=r.items||certItems; paint();
+            toast(r.ok?(h+'：证书链检测完成'):'检测失败：'+(r.error||'')); })
+          .catch(()=>{ certProg='检测失败'; paint(); });
+      };
+
+      /* 一键全部：逐个站点 检测证书链 → 下载并安装到「当前用户→中级证书颁发机构」 */
+      const fixAll=async(btn)=>{
+        const hosts=certItems.map(x=>x.host);
+        if(!hosts.length) return;
+        setOpen(true);
+        btn.disabled=true; btn.textContent='批量处理中…';
+        let i=0, okN=0, instN=0;
+        for(const h of hosts){
+          i++;
+          certProg=`正在处理 ${i}/${hosts.length}：${h}`; paint();
+          const b2=certBox.querySelector('#certAll');
+          if(b2){ b2.disabled=true; b2.textContent='批量处理中 '+(i-1)+'/'+hosts.length; }
+          try{
+            let r=await api('/api/cert/chain',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({host:h})});
+            if(r&&r.items) certItems=r.items;
+            const it=certItems.find(x=>x.host===h)||{};
+            const need=(it.chain||[]).filter(c=>!c.selfSigned&&!c.installed).length;
+            if(need){
+              const r2=await api('/api/cert/install',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({host:h})});
+              if(r2&&r2.items) certItems=r2.items;
+              if(r2&&r2.ok) instN++;
+            }
+            okN++;
+          }catch(e){}
+          paint();
+        }
+        certProg=`完成：检测 ${okN}/${hosts.length} 个站点${instN?('，已安装 '+instN+' 个站点的证书'):''}${okN<hosts.length?'（部分站点网络不通，可稍后重试）':''}`;
+        paint();
+        toast('一键修复完成');
+      };
+
+      api('/api/cert/list').then(r=>{ certItems=r.items||[]; paint(); })
+        .catch(()=>{ certBox.innerHTML='<div style="font-size:12px;color:var(--sub)">加载失败</div>'; });
+    }
   }
 
   if(state.tab==='look'){
@@ -1070,6 +2814,13 @@ function renderModal(){
         </div></div>
       <div class="field"><div class="lb">字号<div class="hint">点击立即生效，正文/标题/热度同步缩放</div></div>
         <div class="ctl">${[['0.9','小'],['1','标准'],['1.2','大'],['1.4','特大']].map(([v,t])=>`<button class="pill ${String(S.fontScale)==v?'on':''}" data-k="fontScale" data-v="${v}">${t}</button>`).join('')}</div></div>
+      <div class="field"><div class="lb">看板列数<div class="hint">总览看板横向一行放几个新闻源板块，4~12 可选；「自动」按窗口宽度铺满（窗口越宽放越多）。也可以直接拖卡片右边缘调宽，所有板块会同步</div></div>
+        <div class="ctl">
+          <button class="pill ${!parseInt(S.boardCols,10)?'on':''}" data-k="boardCols" data-v="0">自动</button>
+          ${[1,2,3,4,5,6,7,8,9,10,11,12].map(n=>`<button class="pill ${parseInt(S.boardCols,10)===n?'on':''}" data-k="boardCols" data-v="${n}">${n}</button>`).join('')}</div></div>
+      <div class="field"><div class="lb">看板行数<div class="hint">竖向一屏放几个板块（2~6），高度由屏幕自动均分；拖卡片底边可手动改高度，所有板块同步</div></div>
+        <div class="ctl">${[1,2,3,4,5,6].map(n=>`<button class="pill ${(parseInt(S.boardRows,10)||2)===n?'on':''}" data-k="boardRows" data-v="${n}">${n}</button>`).join('')}
+          <button class="pill" id="boardFitBtn" title="清掉手动宽高，按窗口重算并铺满整屏">⤢ 自适应铺满</button></div></div>
       <div class="field"><div class="lb">界面字体<div class="hint">均为 Windows 常规自带字体，点击立即生效</div></div>
         <div class="ctl" style="flex-wrap:wrap;max-width:72%">
           ${fonts.map(([v,t])=>`<button class="pill ${(S.fontFamily||'')===v?'on':''}" data-font="${esc(v)}">${t}</button>`).join('')}
@@ -1087,10 +2838,13 @@ function renderModal(){
           <span id="bgOpV" style="font-size:12px;color:var(--sub)">${Math.round((S.bgOpacity??0.14)*100)}%</span></div></div>
       <input type="file" id="bgFile" accept="image/*" class="hide">`;
     B.querySelectorAll('.pill[data-k]').forEach(b=>b.onclick=()=>{
-      let v=b.dataset.v; if(b.dataset.k==='fontScale') v=parseFloat(v);
+      let v=b.dataset.v;
+      if(['fontScale','boardCols','boardRows'].includes(b.dataset.k)) v=parseFloat(v);
       setS(b.dataset.k,v);
       toast(b.dataset.k==='fontScale'?'字号已调整：'+b.textContent:'设置已保存');
     });
+    const bfb=B.querySelector('#boardFitBtn');
+    if(bfb) bfb.onclick=()=>boardAutoFit();
     B.querySelectorAll('.pill[data-acc]').forEach(b=>b.onclick=()=>setS('accent',b.dataset.acc));
     B.querySelectorAll('.pill[data-font]').forEach(b=>b.onclick=()=>{
       setS('fontFamily',b.dataset.font); toast('字体已切换：'+b.textContent);
@@ -1125,13 +2879,192 @@ function renderModal(){
 
   if(state.tab==='sources'){
     B.appendChild(el('div','tip',`全部 <b>${state.cfg.sources.length}</b> 个源都能在这里<b>开关</b>、<b>改地址</b>、<b>改条数</b>、<b>删除</b>或<b>新增</b>。
-      支持左侧<b>勾选</b>后<b>批量删除</b>；可<b>导出</b>全部源为文件、用文件<b>批量导入</b>。
-      左侧列表支持<b>拖动排序</b>；关掉开关的源会自动从左侧隐藏。改完地址点“测”可以马上验证能不能解析。`));
+      支持<b>分类管理</b>：新建/改名/删除分类，把下面的<b>源行拖到任意分类上</b>即可换分组，也可用每行的<b>分类下拉框</b>选择。
+      可<b>导出</b>全部源为文件、用文件<b>批量导入</b>。改完地址点“测”可以马上验证能不能解析。`));
+    /* ---- 分类管理（V6.2：分类由用户自己增删改） ---- */
+    const cm=el('div'); cm.style.cssText='display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin:0 0 10px;padding:8px 10px;background:var(--panel);border-radius:10px';
+    /* M9.2：已隐藏分类专区——主行只放显示中的分类，隐藏的分类收进可展开面板，可恢复/删除 */
+    const hmBox=el('div'); hmBox.style.cssText='display:none;flex-wrap:wrap;gap:6px;margin:0 0 10px;padding:8px 10px;background:var(--panel);border-radius:10px;border:1px dashed var(--sub)';
+    const renderHM=()=>{
+      const hidList=hiddenCats();
+      const list=catsOnly().filter(c=>hidList.indexOf(c)>=0);
+      const locHid = hasRegion() && hidList.indexOf('本地')>=0;   // V7.9.14：本地也可隐藏
+      if(!state.showHidCats || (!list.length && !locHid)){ hmBox.style.display='none'; hmBox.innerHTML=''; return; }
+      hmBox.style.display='flex';
+      hmBox.innerHTML = `<div style="flex:0 0 100%;font-size:12px;color:var(--sub);line-height:1.7;margin-bottom:2px">
+          🚫 <b style="color:var(--text)">已隐藏分类（${list.length+(locHid?1:0)}）</b>：导航栏不显示、里面的源不抓取。
+          点<b>「恢复显示」</b>回到导航栏并开启该分类的源；点<b>「删除」</b>把分类连同源一起从清单移除。</div>`
+        + (locHid ? `<span class="cmi" style="display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:8px;
+                background:color-mix(in srgb,var(--sub) 12%,transparent);border:1px dashed transparent">
+                <b style="font-weight:600;font-size:12.5px;color:var(--text);opacity:.8">本地</b>
+                <i style="font-style:normal;font-size:11px;color:var(--sub)">1 个源</i>
+                <button class="mini" data-show="本地" title="取消隐藏：导航栏重新显示「本地」"
+                  style="padding:1px 7px;font-size:11.5px">👁 恢复显示</button>
+                <button class="mini danger" data-hdel="本地" title="删除「本地」分类并清空地区设置"
+                  style="padding:1px 7px;font-size:11.5px">🗑 删除</button></span>` : '')
+        + list.map(c=>{
+            const n=state.cfg.sources.filter(s=>catHas(s,c)).length;
+            return `<span class="cmi" data-hcat="${esc(c)}" style="display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:8px;
+                background:color-mix(in srgb,var(--sub) 12%,transparent);border:1px dashed transparent">
+                <b style="font-weight:600;font-size:12.5px;color:var(--text);opacity:.8">${esc(c)}</b>
+                <i style="font-style:normal;font-size:11px;color:var(--sub)">${n} 个源</i>
+                <button class="mini" data-show="${esc(c)}" title="取消隐藏：导航栏重新显示该分类，并开启它下面的源"
+                  style="padding:1px 7px;font-size:11.5px">👁 恢复显示</button>
+                <button class="mini danger" data-hdel="${esc(c)}" title="删除该分类及里面的 ${n} 个源（不再抓取）"
+                  style="padding:1px 7px;font-size:11.5px">🗑 删除</button></span>`;
+          }).join('');
+      hmBox.querySelectorAll('[data-show]').forEach(b=>b.onclick=()=>{
+        const c=b.dataset.show;
+        setHiddenCat(c,false);
+        const st=(state.cfg.settings=state.cfg.settings||{});
+        const un=Array.isArray(st.unhideCats)?st.unhideCats:[];
+        if(un.indexOf(c)<0) un.push(c);
+        st.unhideCats=un;                        // 让后端下次启动别再把这条压回隐藏
+        let on=0;
+        if(c!=='本地'){ state.cfg.sources.forEach(s=>{ if(catHas(s,c) && !s.enabled){ s.enabled=true; on++; } }); }
+        saveCfg(); refreshCats(); renderCM(); renderCats(); renderSidebar(); render();
+        toast('已恢复「'+c+'」'+(on?('，并开启 '+on+' 个源'):''));
+      });
+      hmBox.querySelectorAll('[data-hdel]').forEach(b=>b.onclick=()=>{
+        const c=b.dataset.hdel;
+        if(c==='本地'){ if(!confirm('删除「本地」分类？已设置的地区会被清空。')) return; clearRegion(); renderHM(); renderCM(); return; }
+        const n=state.cfg.sources.filter(s=>srcCat(s)===c).length;
+        if(!confirm('删除分类「'+c+'」及里面的 '+n+' 个源？\n\n删除后该分类和这些源都不再出现在清单里、也不再抓取（可先用「导出源」留底）。')) return;
+        state.cfg.sources=state.cfg.sources.filter(s=>srcCat(s)!==c);
+        const st=(state.cfg.settings=state.cfg.settings||{});
+        st.cats=(st.cats||[]).filter(x=>x!==c);
+        st.hideCats=(st.hideCats||[]).filter(x=>x!==c);
+        if(state.cat===c) state.cat='全部';
+        if(state.view && state.view!=='all' && !state.cfg.sources.some(s=>s.id===state.view)) state.view='all';
+        saveCfg(); refreshCats(); renderCM(); renderCats(); renderSidebar(); render();
+        toast('已删除分类「'+c+'」及 '+n+' 个源');
+      });
+    };
+    const renderCM=()=>{
+      const items=catsOnly().filter(c=>hiddenCats().indexOf(c)<0).map(c=>{
+        const n=state.cfg.sources.filter(s=>catHas(s,c)).length;
+        if(state.catRen===c) return `<span class="cmi"><input class="cren" value="${esc(c)}" maxlength="12" style="width:90px;font-size:12px;padding:2px 6px;border-radius:6px;border:1px solid var(--blue);background:var(--bg);color:var(--text)">
+            <button class="mini" data-ok="1" style="padding:1px 6px">✓</button><button class="mini" data-cancel="1" style="padding:1px 6px">✕</button></span>`;
+        /* V8.0.0：「推广」是广告位分类——不可改名/隐藏/删除，只能调顺序 */
+        if(c===PROTECT_CAT){
+          return `<span class="cmi" data-cat="${esc(c)}" style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:8px;
+              background:color-mix(in srgb,#e8402f 12%,transparent);border:1px dashed #e8402f55">
+              <b title="推广广告位：不可改名、不可隐藏、不可删除，只能调整顺序" style="font-weight:600;font-size:12.5px;color:#e8402f">${esc(c)}</b><i style="font-style:normal;font-size:11px;color:var(--sub)">广告位</i>
+              <button class="cup" data-up="${esc(c)}" title="上移（导航栏顺序）">↑</button>
+              <button class="cdn" data-down="${esc(c)}" title="下移（导航栏顺序）">↓</button></span>`;
+        }
+        return `<span class="cmi" data-cat="${esc(c)}" style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:8px;cursor:pointer;
+            background:color-mix(in srgb,var(--blue) 11%,transparent);border:1px dashed transparent">
+            <b data-ren="${esc(c)}" title="点击改名" style="font-weight:600;font-size:12.5px;color:var(--blue)">${esc(c)}</b><i style="font-style:normal;font-size:11px;color:var(--sub)">${n}</i>
+            <button data-hide="${esc(c)}" title="隐藏分类（导航栏不显示，源保留但不再抓取；可在「已隐藏分类」里恢复）" style="border:none;background:none;color:var(--sub);cursor:pointer;font-size:11px;padding:0">👁</button>
+            <button data-del="${esc(c)}" title="删除该分类（里面的源移回「综合」）" style="border:none;background:none;color:var(--sub);cursor:pointer;font-size:11px;padding:0">✕</button>
+            <button class="cup" data-up="${esc(c)}" title="上移（导航栏顺序）">↑</button>
+            <button class="cdn" data-down="${esc(c)}" title="下移（导航栏顺序）">↓</button></span>`;
+      }).join('');
+      /* V8.0.0：「本地」分类（设置地区后才有）——可隐藏、可删除；没设地区时整条不出现 */
+      const locHid=hiddenCats().indexOf('本地')>=0;
+      const locChip=hasRegion()?`<span class="cmi" data-cat="本地" style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:8px;
+          background:color-mix(in srgb,#0e9f6e 12%,transparent);border:1px dashed #0e9f6e55">
+          <b title="本地（按设置里填的省/市聚合）" style="font-weight:600;font-size:12.5px;color:${locHid?'var(--sub)':'#0e9f6e'}">本地</b><i style="font-style:normal;font-size:11px;color:var(--sub)">${locHid?'已隐藏':'地区新闻'}</i>
+          <button data-hideloc="1" title="${locHid?'恢复显示到导航栏':'隐藏（导航栏不显示）'}" style="border:none;background:none;color:var(--sub);cursor:pointer;font-size:11px;padding:0">👁</button>
+          <button data-delloc="1" title="删除「本地」分类（同时清空地区设置）" style="border:none;background:none;color:var(--sub);cursor:pointer;font-size:11px;padding:0">✕</button></span>`:'';
+      const hN=catsOnly().filter(c=>hiddenCats().indexOf(c)>=0).length;
+      cm.innerHTML=items+locChip
+        + (state.catRen==='__new__'
+          ? `<span class="cmi"><input class="cren" value="" placeholder="新分类名" maxlength="12" style="width:90px;font-size:12px;padding:2px 6px;border-radius:6px;border:1px solid var(--blue);background:var(--bg);color:var(--text)">
+              <button class="mini" data-ok="1" style="padding:1px 6px">✓</button><button class="mini" data-cancel="1" style="padding:1px 6px">✕</button></span>`
+          : `<button class="mini" data-new="1" style="padding:2px 8px">＋ 新建分类</button>`)
+        + (hN ? `<button class="mini" data-hidbox="1" title="查看/恢复/删除已隐藏的分类（共 ${hN} 个）"
+              style="padding:2px 8px;border:1px dashed var(--sub);color:${state.showHidCats?'var(--blue)':'var(--sub)'}">🚫 已隐藏分类 <b>${hN}</b> ${state.showHidCats?'▲':'▼'}</button>` : '')
+        + `<span style="color:var(--sub);font-size:11.5px;margin-left:4px">把下面的源行拖到分类上即可移动分组；按住分类名左右拖动可排序</span>`;
+      bindCmDrag(cm, renderCM);
+      const inp=cm.querySelector('.cren');
+      if(inp){ inp.focus(); if(state.catRen!=='__new__') inp.select();
+        const commit=()=>{
+          const v=(inp.value||'').trim().slice(0,12);
+          if(state.catRen==='__new__'){
+            if(v && DROP_CATS.indexOf(v)>=0){ toast('「'+v+'」已下线，不能再用这个分类名'); state.catRen=''; renderCM(); return; }
+            if(v && !catsOnly().includes(v)) state.cfg.settings.cats.push(v);
+            state.catRen='';
+          }else{
+            const old=state.catRen; state.catRen='';
+            if(v && DROP_CATS.indexOf(v)>=0){ toast('「'+v+'」已下线，不能改成这个分类名'); state.catRen=''; renderCM(); return; }
+            if(v && v!==old && !catsOnly().includes(v)){
+              const cs=state.cfg.settings.cats; cs[cs.indexOf(old)]=v;
+              state.cfg.sources.forEach(s=>{
+                if(catHas(s,old)) setSrcCats(s,srcCats(s).map(x=>x===old?v:x));
+              });
+              if(state.cat===old) state.cat=v;
+            }
+          }
+          saveCfg(); renderCM(); renderCats(); renderSidebar(); if($('#mask').classList.contains('on')) renderModal(); render();
+        };
+        inp.onkeydown=e=>{ if(e.key==='Enter') commit(); if(e.key==='Escape'){ state.catRen=''; renderCM(); } };
+        cm.querySelector('[data-ok]').onclick=commit;
+        cm.querySelector('[data-cancel]').onclick=()=>{ state.catRen=''; renderCM(); };
+      }
+      const nb=cm.querySelector('[data-new]');
+      if(nb) nb.onclick=()=>{ state.catRen='__new__'; renderCM(); };
+      const hb=cm.querySelector('[data-hidbox]');
+      if(hb) hb.onclick=()=>{ state.showHidCats=!state.showHidCats; renderCM(); };
+      cm.querySelectorAll('[data-ren]').forEach(b=>b.onclick=()=>{ state.catRen=b.dataset.ren; renderCM(); });
+      cm.querySelectorAll('[data-hide]').forEach(b=>b.onclick=()=>{
+        const c=b.dataset.hide;
+        const wasHid=hiddenCats().indexOf(c)>=0;
+        setHiddenCat(c,!wasHid);
+        if(!wasHid) state.showHidCats=true;      // 刚隐藏 → 自动展开「已隐藏分类」，一眼看到能恢复
+        saveCfg(); renderCM(); renderCats(); renderSidebar();
+        if($('#mask').classList.contains('on')) renderModal();
+        render();
+        toast(wasHid?('已显示「'+c+'」'):('已隐藏「'+c+'」，源仍保留，可在这里恢复'));
+      });
+      /* V8.0.0：本地分类的隐藏/恢复与删除 */
+      const hl=cm.querySelector('[data-hideloc]');
+      if(hl) hl.onclick=()=>{
+        const hid=hiddenCats().indexOf('本地')>=0;
+        setHiddenCat('本地',!hid);
+        saveCfg(); renderCM(); renderCats(); renderSidebar();
+        if($('#mask').classList.contains('on')) renderModal();
+        render();
+        toast(hid?'「本地」已恢复到导航栏':'已隐藏「本地」（地区设置保留，可在这里恢复）');
+      };
+      const dl=cm.querySelector('[data-delloc]');
+      if(dl) dl.onclick=()=>{
+        if(!confirm('删除「本地」分类？已设置的地区会被清空（之后可在「常规」里重新填写）。')) return;
+        clearRegion(); renderCM(); renderCats(); renderSidebar();
+      };
+      /* V7.8：↑↓ 调整分类在导航栏的顺序 */
+      cm.querySelectorAll('[data-up],[data-down]').forEach(b=>b.onclick=()=>{
+        const c=b.dataset.up||b.dataset.down, dir=b.dataset.up?-1:1;
+        const cs=catsOnly().slice();
+        const i=cs.indexOf(c), j=i+dir;
+        if(i<0||j<0||j>=cs.length) return;
+        cs.splice(j,0,cs.splice(i,1)[0]);
+        state.cfg.settings.cats=cs;
+        saveCfg(); renderCM(); renderCats(); renderSidebar();
+      });
+      cm.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{
+        const c=b.dataset.del;
+        if(!confirm('删除分类「'+c+'」？分类下只属于它的源会移回「综合」（源本身不删）；同时属于其它分类的源只摘掉这个分类。')) return;
+        const cs=state.cfg.settings.cats; cs.splice(cs.indexOf(c),1);
+        state.cfg.sources.forEach(s=>{
+          if(catHas(s,c)) setSrcCats(s,srcCats(s).filter(x=>x!==c));
+        });
+        if(state.cat===c) state.cat='全部';
+        saveCfg(); renderCM(); renderCats(); renderSidebar(); if($('#mask').classList.contains('on')) renderModal(); render();
+        toast('已删除分类「'+c+'」');
+      });
+      renderHM();
+    };
+    renderCM();
+    B.appendChild(cm);
+    B.appendChild(hmBox);
     // 工具条：全选 / 批量删除 / 导出 / 导入
     const bar=el('div','srcrow'); bar.style.justifyContent='space-between'; bar.style.background='var(--panel)';
     bar.innerHTML=`<label style="display:flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer">
         <input type="checkbox" id="ckAll"> 全选</label>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="mini" id="addSrc" title="新增一个自定义新闻源">＋ 新增新闻源</button>
         <button class="mini" id="expSrc">⬇ 导出源</button>
         <button class="mini" id="impSrc">⬆ 导入源</button>
         <button class="mini danger" id="delSel">🗑 批量删除</button></div>
@@ -1160,6 +3093,11 @@ function renderModal(){
       a.download='热榜助手源_'+new Date().toISOString().slice(0,10)+'.json'; a.click();
       URL.revokeObjectURL(a.href); toast('已导出 '+state.cfg.sources.length+' 个源');
     };
+    bar.querySelector('#addSrc').onclick=()=>{
+      state.addOpen=true; renderModal();
+      setTimeout(()=>{ const b=$('#mBody')&&$('#mBody').querySelector('.addbox');
+        if(b) b.scrollIntoView({block:'center',behavior:'smooth'}); },80);
+    };
     bar.querySelector('#impSrc').onclick=()=>bar.querySelector('#impFile').click();
     bar.querySelector('#impFile').onchange=e=>{
       const file=e.target.files[0]; if(!file) return;
@@ -1176,7 +3114,7 @@ function renderModal(){
               name:item.name||'导入源', url:item.url, parser:item.parser||'auto',
               sel:item.sel||{}, count:parseInt(item.count,10)||30,
               enabled:item.enabled!==false, note:item.note||'导入源', search:item.search||'',
-              cat:CATS.includes(item.cat)?item.cat:'综合'};
+              cat:(splitCat(item.cat).slice(0,4).join(',')||'综合')};
             const i=state.cfg.sources.findIndex(x=>x.id===s.id);
             if(i>=0){ state.cfg.sources[i]=s; over++; } else { state.cfg.sources.push(s); added++; }
           });
@@ -1221,12 +3159,13 @@ function renderModal(){
     };
     state.cfg.sources.forEach((s,idx)=>{
       const row=el('div','srcrow');
+      row.dataset.sid=s.id;
+      row.title='按住本行拖动可排序，也可拖到上方分类块换分组';
       row.innerHTML=`
         <input type="checkbox" class="ck" data-id="${esc(s.id)}" style="width:15px;height:15px;cursor:pointer;flex:none">
         <span class="sw ${s.enabled?'on':''}" title="显示/隐藏"></span>
         <span class="nm" title="${esc(s.note||s.name)}">${esc(s.name)}</span>
-        <span class="tag" data-a="cat" title="点击切换分类" style="flex:none;font-size:11px;padding:2px 6px;border-radius:6px;cursor:pointer;
-          background:color-mix(in srgb,var(--blue) 11%,transparent);color:var(--blue)">${esc(srcCat(s))}</span>
+        <button class="catsel" data-a="cat" title="选择分类：可多选（一个源可以同时属于多个分类）；也可把本行拖到上方分类块">${esc(catLabel(s))}${srcCats(s).length>1?` <i style="font-style:normal;opacity:.7">+${srcCats(s).length-1}</i>`:''} ▾</button>
         <input class="url" value="${esc(s.url)}" spellcheck="false">
         <input class="num" type="number" min="1" max="50" value="${s.count||30}" title="显示条数（1~50）">
         <div class="ops">
@@ -1235,12 +3174,11 @@ function renderModal(){
           <button data-a="down" title="下移">↓</button>
           <button data-a="del" title="删除">✕</button>
         </div>`;
+      row.addEventListener('dragstart',e=>{ e.preventDefault(); });   // V7.9：改用指针拖拽，屏蔽原生拖拽
       row.querySelector('input.ck').onchange=syncDel;
       row.querySelector('[data-a="cat"]').onclick=e=>{
-        const cur=srcCat(s), idx=CATS.indexOf(cur);
-        s.cat=CATS[(idx+1)%CATS.length];   // 点一下循环切换分类
-        e.target.textContent=s.cat; e.target.title='点击切换分类';
-        saveCfg(); renderSidebar(); render();
+        e.stopPropagation();
+        openCatPick(e.currentTarget, s);
       };
       row.querySelector('.sw').onclick=()=>{ if(state.cfg.settings.srcLocked){ toast('新闻源已锁定，先关闭「锁定新闻源」'); return; }
         s.enabled=!s.enabled; saveCfg(); renderModal(); renderSidebar(); render();
@@ -1260,8 +3198,9 @@ function renderModal(){
           .then(r=>toast(s.name+'：成功 '+r.count+' 条'+(r.sample[0]?'，如「'+r.sample[0].title.slice(0,16)+'」':'')))
           .catch(()=>toast(s.name+'：解析失败'));
       };
-      row.querySelector('[data-a="up"]').onclick=()=>{ if(idx>0){const a=state.cfg.sources;[a[idx-1],a[idx]]=[a[idx],a[idx-1]];saveCfg();renderModal();renderSidebar();} };
-      row.querySelector('[data-a="down"]').onclick=()=>{ const a=state.cfg.sources; if(idx<a.length-1){[a[idx+1],a[idx]]=[a[idx],a[idx+1]];saveCfg();renderModal();renderSidebar();} };
+      /* V7.9.1：↑↓ 一键排序（与侧栏同一套逻辑，单击立刻生效并保存） */
+      row.querySelector('[data-a="up"]').onclick=()=>moveSourceStep(s.id,-1,false);
+      row.querySelector('[data-a="down"]').onclick=()=>moveSourceStep(s.id,1,false);
       row.querySelector('[data-a="del"]').onclick=()=>{
         if(!confirm('删除「'+s.name+'」？只影响本机显示。')) return;
         state.cfg.sources=state.cfg.sources.filter(x=>x.id!==s.id);
@@ -1270,9 +3209,8 @@ function renderModal(){
       };
       B.appendChild(row);
     });
-    const add=el('button','mini','＋ 新增新闻源'); add.style.marginTop='4px';
-    add.onclick=()=>{ state.addOpen=true; renderModal(); };
-    B.appendChild(add);
+    bindModalDrag(B);   // V7.9：设置页源行按住拖动排序 / 拖到分类块换分组
+    /* V8.0.2：「＋ 新增新闻源」移到顶部工具条（导出源/导入源前面），底部不再重复放按钮 */
     if(state.addOpen){
       const box=el('div','addbox');
       box.innerHTML=`<div class="r"><input id="nName" placeholder="名称，如：我的博客热榜" style="flex:1">
@@ -1309,17 +3247,309 @@ function renderModal(){
     }
   }
 
+  if(state.tab==='feedback'){
+    const isAdmin=fbIsAdmin();
+    const mode=state.fbMode||(isAdmin?'admin':'public');
+    B.innerHTML=`
+      <div class="tip" style="margin-bottom:10px">用着有不顺手的地方、想加什么站点，都可以告诉我们。内容审核通过后大家才能看到；<b>无需登录</b>即可提交，联系方式仅管理员可见。</div>
+      <div style="background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:12px">
+        <textarea id="fbText" maxlength="300" rows="3" placeholder="写下你的建议（最多 300 字）"
+          style="width:100%;box-sizing:border-box;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);color:var(--text);resize:vertical"></textarea>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+          <span id="fbCnt" style="font-size:12px;color:var(--sub);margin-left:auto">0/300</span>
+        </div>
+        <input id="fbContact" maxlength="60" placeholder="联系方式（选填，仅管理员可见）"
+          style="width:100%;box-sizing:border-box;margin-top:8px;padding:7px 8px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);color:var(--text)">
+        <button class="mini primary" id="fbSend" style="margin-top:8px;width:100%">提交建议</button>
+      </div>
+      <div class="seg" id="fbSeg" style="margin-bottom:10px">
+        ${isAdmin?`<button data-v="admin" class="${mode==='admin'?'on':''}">审核台</button>`:''}
+        <button data-v="public" class="${mode==='public'?'on':''}">大家的建议</button>
+        <button data-v="mine" class="${mode==='mine'?'on':''}">我的</button>
+      </div>
+      ${!isAdmin&&mode==='admin'?'':`<div id="fbList" style="min-height:60px"><div style="color:var(--sub);font-size:13px">加载中…</div></div>`}
+      ${!isAdmin?`<div style="font-size:11.5px;color:var(--sub);margin-top:8px">管理员？先在「设置 → 账号」登录管理员邮箱，即可在这里管理审核。</div>`:''}`;
+    const st=B.querySelector('#fbText'), cnt=B.querySelector('#fbCnt');
+    if(st) st.oninput=()=>{ cnt.textContent=st.value.length+'/300'; };
+    const sendBtn=B.querySelector('#fbSend');
+    if(sendBtn) sendBtn.onclick=async()=>{
+      const bad=fbGuard(st.value); if(bad) return toast(bad);
+      sendBtn.disabled=true; sendBtn.textContent='提交中…';
+      try{
+        await fbInsert({content:st.value.trim(), contact:(B.querySelector('#fbContact').value||'').trim().slice(0,60)});
+        st.value=''; cnt.textContent='0/300'; B.querySelector('#fbContact').value='';
+        toast('已提交，审核通过后大家可见'); renderModal();
+      }catch(e){
+        const msg=String(e&&e.message||e||'');
+        /* 网络层失败（Failed to fetch / 超时 / 502）时给出可操作提示，而不是干巴巴一个报错 */
+        const net=/failed to fetch|networkerror|timeout|timed out|502|503|504|ECONN|socket/i.test(msg);
+        toast(net?'提交失败：连不上腾讯云（检查网络或代理后重试，也可稍后再试）':'提交失败：'+msg);
+        sendBtn.disabled=false; sendBtn.textContent='提交建议';
+      }
+    };
+    const seg=B.querySelector('#fbSeg');
+    if(seg) seg.querySelectorAll('button').forEach(b=>b.onclick=()=>{
+      state.fbMode=b.dataset.v; renderModal();
+    });
+    if(!isAdmin&&mode==='admin'){
+      const go=document.createElement('button');
+      go.className='mini primary'; go.style.cssText='width:100%;margin-top:10px';
+      go.textContent='去账号页登录管理员';
+      go.onclick=()=>{ state.tab='account'; renderModal(); };
+      B.appendChild(go);
+    }
+    /* ---- 列表 ---- */
+    const listEl=B.querySelector('#fbList');
+    if(listEl){
+    const badge=x=>x==='approved'?'<span style="color:#0e9f6e">已通过</span>':x==='rejected'?'<span style="color:#e04438">未通过</span>':'<span style="color:#d97706">审核中</span>';
+    const escI=s=>esc(String(s==null?'':s));
+    const replyBox=`
+      <div class="fbReplyIn" style="display:none;margin-top:8px">
+        <textarea rows="2" maxlength="300" placeholder="写回复（也需审核，最多 300 字）"
+          style="width:100%;box-sizing:border-box;padding:6px 8px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);color:var(--text)"></textarea>
+        <div style="display:flex;gap:6px;margin-top:4px"><button class="mini primary fbDo">发送</button><button class="mini fbNo">取消</button></div>
+      </div>`;
+    const itemHTML=x=>`
+      <div data-pid="${x.id}" style="background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:9px 10px;margin-bottom:8px">
+        <div style="font-size:13.5px;color:var(--text);word-break:break-all">${escI(x.content)}</div>
+        <div style="font-size:11.5px;color:var(--sub);margin-top:6px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+          <span>${new Date(x.created_at).toLocaleString()}</span>
+          ${x.ver?`<span>${escI(x.ver)}</span>`:''}
+          ${isAdmin||mode==='mine'?badge(x.status):''}
+          ${isAdmin&&x.contact?`<span>联系: ${escI(x.contact)}</span>`:''}
+          ${isAdmin&&x.email?`<span>账号: ${escI(x.email)}</span>`:''}
+          ${x.status==='approved'&&mode==='public'?`<button class="mini fbRep" style="margin-left:auto">回复</button>`:''}
+          ${isAdmin?`<button class="mini fbPass" style="margin-left:auto">通过</button><button class="mini fbRej">拒绝</button><button class="mini danger fbDel">删除</button>`:''}
+        </div>
+        ${replyBox}
+      </div>`;
+    const pidOf=elm=>{ let p=elm; while(p&&p!==listEl){ if(p.dataset&&p.dataset.pid) return p.dataset.pid; p=p.parentNode; } return null; };
+    (async()=>{
+      try{
+        const {items}=await fbLoad(mode==='mine'?'mine':(mode==='admin'?'admin':'public'));
+        const sugg=items.filter(x=>x.kind==='suggestion');
+        const repliesOf=id=>items.filter(x=>x.kind==='reply'&&String(x.parent_id)===String(id));
+        if(!sugg.length){ listEl.innerHTML='<div style="color:var(--sub);font-size:13px;padding:10px 0">'
+          +(mode==='mine'?'你还没有提过建议':mode==='admin'?'暂无内容':'还没有已通过的建议，来提第一条吧')+'</div>'; }
+        else{
+          listEl.innerHTML=sugg.map(x=>itemHTML(x)
+            +(repliesOf(x.id).length?'<div style="margin:-4px 0 8px 14px">'
+              +repliesOf(x.id).map(r=>`<div style="background:var(--panel2);border-radius:8px;padding:6px 9px;margin-bottom:5px;font-size:12.5px;color:var(--text)"><b style="color:var(--blue)">作者回复</b> · ${escI(r.content)}
+                ${isAdmin||mode==='mine'?' '+badge(r.status):''}</div>`).join('')+'</div>':'')).join('');
+        }
+        /* 事件绑定 */
+        listEl.querySelectorAll('.fbRep').forEach(b=>b.onclick=()=>{
+          const item=b.closest('[data-pid]'); if(!item) return;
+          const box=item.querySelector('.fbReplyIn');
+          if(box) box.style.display=box.style.display==='none'?'block':'none';
+        });
+        listEl.querySelectorAll('.fbReplyIn').forEach(box=>{
+          box.querySelector('.fbNo').onclick=()=>{ box.style.display='none'; };
+          box.querySelector('.fbDo').onclick=async()=>{
+            const ta=box.querySelector('textarea');
+            const bad=fbGuard(ta.value); if(bad) return toast(bad);
+            const pid=pidOf(box); if(pid==null) return toast('找不到所属建议，请刷新重试');
+            try{
+              await fbInsert({kind:'reply', parent_id:pid, content:ta.value.trim()});
+              toast('回复已提交，审核通过后显示'); renderModal();
+            }catch(e){ toast('回复失败：'+(e.message||e)); }
+          };
+        });
+        if(isAdmin){
+          const fbSet=async(b,patch,okMsg)=>{
+            const id=pidOf(b); if(id==null) return;
+            const r=await api('/api/feedback/set',{method:'POST',headers:{'Content-Type':'application/json'},
+              body:JSON.stringify(Object.assign({id},patch))});
+            if(!r.ok) return toast('操作失败：'+(r.error||''));
+            toast(okMsg); renderModal();
+          };
+          listEl.querySelectorAll('.fbPass').forEach(b=>b.onclick=()=>fbSet(b,{status:'approved'},'已通过'));
+          listEl.querySelectorAll('.fbRej').forEach(b=>b.onclick=()=>fbSet(b,{status:'rejected'},'已拒绝'));
+          listEl.querySelectorAll('.fbDel').forEach(b=>b.onclick=()=>{
+            if(confirm('确定删除这条内容？')) fbSet(b,{deleted:true},'已删除');
+          });
+        }
+      }catch(e){ listEl.innerHTML='<div style="color:#e04438;font-size:13px">加载失败：'+esc(e.message||e)+'</div>'; }
+    })();
+    }
+  }
+
+  /* M8.0：账号页 —— 登录 / 注册 / 找回密码 / 云同步 */
+  if(state.tab==='account'){
+    const A=state.acct;
+    if(A.logged){
+      const u=A.user||{};
+      B.innerHTML=`
+        <div class="field"><div class="lb">当前账号</div>
+          <div class="ctl" style="color:var(--text);font-weight:600">${esc(acctNick(u))} <span style="font-weight:400;color:var(--sub)">（${esc(u.email||'')}）</span></div></div>
+        <div class="field"><div class="lb">云端同步<div class="hint">登录后修改设置会自动上传云端并绑定当前账号；也可以手动同步</div></div>
+          <div class="ctl" style="flex-wrap:wrap;gap:8px">
+            <button class="pill" id="acPush">⬆ 上传本地设置到云端</button>
+            <button class="pill" id="acPull">⬇ 从云端恢复配置</button></div></div>
+        <div class="field"><div class="lb">退出登录<div class="hint">退出后设置仅保存在本地，不再上传云端</div></div>
+          <div class="ctl"><button class="pill" id="acOut" style="color:#dc2626;border-color:#dc2626">退出登录</button></div></div>`;
+      B.querySelector('#acPush').onclick=cloudPush;
+      B.querySelector('#acPull').onclick=()=>{ if(confirm('用云端配置覆盖本地设置？')) cloudRestore(); };
+      B.querySelector('#acOut').onclick=async ()=>{
+        await api('/api/auth/logout',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+        try{ localStorage.removeItem('hb_cloud_asked'); }catch(e){}
+        await acctRefresh(); renderModal(); toast('已退出登录');
+      };
+    }
+    else if(A.mode==='login'){
+      B.innerHTML=`
+        <div class="field"><div class="lb">邮箱</div>
+          <div class="ctl"><input id="lgEmail" class="url" style="max-width:260px" placeholder="you@example.com" spellcheck="false"></div></div>
+        <div class="field"><div class="lb">密码</div>
+          <div class="ctl" style="gap:6px">
+            <input id="lgPwd" type="password" class="url" style="max-width:200px" placeholder="密码">
+            <button class="pill" id="lgEye" title="显示/隐藏">👁</button></div></div>
+        <div class="field"><div class="lb">&nbsp;</div>
+          <div class="ctl" style="gap:8px">
+            <button class="mini primary" id="lgGo">登录</button>
+            <button class="mini" id="lgToReg">去注册</button>
+            <button class="mini" id="lgToReset">忘记密码</button></div></div>`;
+      const em=B.querySelector('#lgEmail'), pw=B.querySelector('#lgPwd');
+      B.querySelector('#lgEye').onclick=e=>acctEye(e.target,pw);
+      const doLogin=async ()=>{
+        if(!em.value.trim()||!pw.value){ toast('请填写邮箱和密码'); return; }
+        const r=await api('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({email:em.value.trim(),password:pw.value})});
+        if(r.ok){ toast('登录成功'); await acctRefresh(); acctAskCloudCover(); renderModal(); }
+        else toast(r.error||'登录失败');
+      };
+      B.querySelector('#lgGo').onclick=doLogin;
+      pw.onkeydown=e=>{ if(e.key==='Enter') doLogin(); };
+      B.querySelector('#lgToReg').onclick=()=>{ A.mode='register'; renderModal(); };
+      B.querySelector('#lgToReset').onclick=()=>{ A.mode='forgot'; renderModal(); };
+    }
+    else if(A.mode==='register'){
+      B.innerHTML=`
+        <div class="field"><div class="lb">邮箱</div>
+          <div class="ctl"><input id="rgEmail" class="url" style="max-width:260px" placeholder="you@example.com" spellcheck="false"></div></div>
+        <div class="field"><div class="lb">昵称<div class="hint">只能是中文和字母</div></div>
+          <div class="ctl"><input id="rgNick" class="url" style="max-width:200px" placeholder="昵称（可留空）" spellcheck="false"></div></div>
+        <div class="field"><div class="lb">邮箱验证码</div>
+          <div class="ctl" style="gap:6px">
+            <input id="rgCode" class="url" style="max-width:120px" placeholder="6 位验证码">
+            <button class="pill" id="rgSend">获取验证码</button></div></div>
+        <div class="field"><div class="lb">设置密码<div class="hint">英文字母+数字，8~16 位</div></div>
+          <div class="ctl" style="gap:6px">
+            <input id="rgPwd" type="password" class="url" style="max-width:160px" placeholder="字母+数字，8~16 位">
+            <button class="pill" id="rgEye" title="显示/隐藏">👁</button></div></div>
+        <div class="field"><div class="lb">确认密码</div>
+          <div class="ctl" style="gap:6px">
+            <input id="rgPwd2" type="password" class="url" style="max-width:160px" placeholder="再输一遍">
+            <button class="pill" id="rgEye2" title="显示/隐藏">👁</button></div></div>
+        <div class="field"><div class="lb">&nbsp;</div>
+          <div class="ctl" style="gap:8px">
+            <button class="mini primary" id="rgGo">注册</button>
+            <button class="mini" id="rgToLogin">去登录</button></div></div>`;
+      const em=B.querySelector('#rgEmail'), nick=B.querySelector('#rgNick'), code=B.querySelector('#rgCode'),
+            p1=B.querySelector('#rgPwd'), p2=B.querySelector('#rgPwd2');
+      B.querySelector('#rgEye').onclick=e=>acctEye(e.target,p1);
+      B.querySelector('#rgEye2').onclick=e=>acctEye(e.target,p2);
+      B.querySelector('#rgSend').onclick=()=>acctSendCode(B.querySelector('#rgSend'),em.value.trim(),'register');
+      B.querySelector('#rgToLogin').onclick=()=>{ A.mode='login'; renderModal(); };
+      B.querySelector('#rgGo').onclick=async ()=>{
+        if(!em.value.trim()){ toast('请填写邮箱'); return; }
+        if(!code.value.trim()){ toast('请填写验证码'); return; }
+        if(!p1.value){ toast('密码不能为空'); return; }
+        if(!/^(?=.*[A-Za-z])(?=.*\d).{8,16}$/.test(p1.value)){ toast('密码需为英文+数字，8~16 位'); return; }
+        if(p1.value!==p2.value){ toast('两次输入的密码不一致'); return; }
+        const nk=nick.value.trim();
+        if(nk && !/^[\u4e00-\u9fa5A-Za-z]{1,24}$/.test(nk)){ toast('昵称只能包含中文和字母'); return; }
+        const r=await api('/api/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({email:em.value.trim(),code:code.value.trim(),vid:A._vid||'',
+                               password:p1.value,nickname:nk})});
+        if(r.ok){ toast('注册成功，已自动登录'); await acctRefresh(); acctAskCloudCover(); renderModal(); }
+        else toast(r.error||'注册失败');
+      };
+    }
+    else{ /* forgot */
+      B.innerHTML=`
+        <div class="field"><div class="lb">注册邮箱</div>
+          <div class="ctl"><input id="fpEmail" class="url" style="max-width:260px" placeholder="注册时填写的邮箱" spellcheck="false"></div></div>
+        <div class="field"><div class="lb">邮箱验证码</div>
+          <div class="ctl" style="gap:6px">
+            <input id="fpCode" class="url" style="max-width:120px" placeholder="6 位验证码">
+            <button class="pill" id="fpSend">获取验证码</button></div></div>
+        <div class="field"><div class="lb">新密码<div class="hint">英文字母+数字，8~16 位</div></div>
+          <div class="ctl" style="gap:6px">
+            <input id="fpPwd" type="password" class="url" style="max-width:160px" placeholder="新密码（字母+数字，8~16 位）">
+            <button class="pill" id="fpEye" title="显示/隐藏">👁</button></div></div>
+        <div class="field"><div class="lb">&nbsp;</div>
+          <div class="ctl" style="gap:8px">
+            <button class="mini primary" id="fpGo">设置新密码</button>
+            <button class="mini" id="fpBack">返回登录</button></div></div>`;
+      const em=B.querySelector('#fpEmail'), code=B.querySelector('#fpCode'), pw=B.querySelector('#fpPwd');
+      B.querySelector('#fpEye').onclick=e=>acctEye(e.target,pw);
+      B.querySelector('#fpSend').onclick=()=>acctSendCode(B.querySelector('#fpSend'),em.value.trim(),'reset');
+      B.querySelector('#fpBack').onclick=()=>{ A.mode='login'; renderModal(); };
+      B.querySelector('#fpGo').onclick=async ()=>{
+        if(!em.value.trim()){ toast('请填写邮箱'); return; }
+        if(!code.value.trim()){ toast('请填写验证码'); return; }
+        if(!pw.value){ toast('密码不能为空'); return; }
+        if(!/^(?=.*[A-Za-z])(?=.*\d).{8,16}$/.test(pw.value)){ toast('密码需为英文+数字，8~16 位'); return; }
+        const r=await api('/api/auth/resetpwd',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({email:em.value.trim(),code:code.value.trim(),vid:A._vid||'',password:pw.value})});
+        if(r.ok){ toast('密码已重置'); await acctRefresh(); renderModal(); }
+        else toast(r.error||'重置失败');
+      };
+    }
+    /* V7.9.4：推广位只在作者（管理员）登录后出现在「账号」页；未登录 / 普通账号一律不渲染 */
+    if(A.logged && A.admin){ B.insertAdjacentHTML('beforeend', adSetBlock(S)); bindAdBlock(B,S); }
+  }
+  if(state.tab==='guide'){
+    const k=t=>`<b style="color:var(--blue,#2563eb)">${t}</b>`;
+    const sec=(icon,title,body)=>`<div style="border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:10px;background:var(--panel2,#fafafa)">
+        <div style="font-weight:700;font-size:13.5px;margin-bottom:6px">${icon} ${title}</div>
+        <div style="font-size:12.5px;line-height:1.95;color:var(--text)">${body}</div></div>`;
+    B.innerHTML=`
+      <div style="font-size:12.5px;color:var(--sub);line-height:1.9;margin-bottom:10px">
+        不需要登录就能用全部功能；登录只是把设置和收藏同步到云端。下面按「看 → 翻 → 改」的顺序说明。
+      </div>
+      ${sec('🚀','30 秒上手',`① 左侧点分类看不同榜单，主区上下滚动浏览；<br>
+        ② 点任意标题用浏览器打开原文，点「★」收藏；<br>
+        ③ 顶栏 ${k('▦ 总览看板')} / ${k('☰ 列表')} 切换排版；<br>
+        ④ 右上角 ${k('⚙ 设置')} 改所有配置，本页就是使用说明。`)}
+      ${sec('🌐','英文标题怎么翻译',`英文标题下方会自动出现一行${k('浅灰色小字')}中文翻译，末尾标「(机翻)」，原文不受影响。<br>
+        · 只翻${k('英文标题')}（中文占比很低的才算），${k('GitHub 板块')}不翻译；<br>
+        · 开关：${k('设置 → 常规 → 英文标题翻译显示')}，默认开启；<br>
+        · 引擎优先级：${k('本机离线模型')}（Marian + CTranslate2）→ 在线引擎兜底；<br>
+        · ${k('怎么下载离线模型')}：设置 → 常规 → 「离线翻译模型」点「下载离线模型（约 68MB）」，等进度到 100% 即装好，之后永久离线、秒出中文，不用再联网；装好后可点「试翻一句」验证。没下载时走在线引擎，偶尔被限流会翻不全，稍等会自动补翻；<br>
+        · 在线引擎密钥：顶栏「译」按钮（翻译显示）里填百度 / 有道密钥，${k('只存本机')}，下次启动自动加载；<br>
+        · 翻译结果会缓存，同一标题只翻一次；翻失败静默跳过，不弹窗。<br>
+        · 想临时整页翻译：点顶栏 ${k('一键翻译本页')} 按钮。`)}
+      ${sec('⚙️','怎么改设置',`右上角 ${k('⚙ 设置')} 打开设置面板，分六个页签：<br>
+        · ${k('常规')}：字号、每源条数、看板条数、本地地区、自动刷新、失败通知时长、英文翻译开关、聚合排序、托盘/退出、朗读语速、Cookie；<br>
+        · ${k('外观')}：主题、配色、字号、字体、背景图；<br>
+        · ${k('新闻源')}：开关、条数、改地址、分类管理、新增源；<br>
+        · ${k('账号')}：登录 / 注册 / 找回密码，云端同步（可选）；<br>
+        · ${k('建议')}：提交使用建议；<br>
+        · ${k('关于')}：版本、更新下载、打赏。`)}
+      ${sec('📰','新闻源排序与分类',`左侧「新闻源」列表每行右侧有 ${k('▲ ▼')} 按钮：点一下上移 / 下移，顺序立即生效并保存。<br>
+        ${k('分类')}（综合 / 财经 / 娱乐 / 科技…）同样用 ${k('‹ ›')} 按钮左右移动；<br>
+        设置 → 新闻源 里也能调整，并支持把源拖到其它分类、隐藏分类、新增自定义源。`)}
+      ${sec('🔍','搜索、朗读与收藏',`顶栏搜索框输入关键词回车筛选；右侧 ${k('🔊')} 按钮朗读本页标题（快捷键 R）；<br>
+        收藏在左侧「收藏」分类里，浏览记录保存在本机，不上传。`)}
+      ${sec('👤','登录与云同步（可选）',`${k('不登录')}完全不影响使用。登录只为换电脑/重装后一键恢复：<br>
+        设置 → 账号 → 登录，登录后改设置会自动上传云端；也可手动「上传 / 从云端恢复」。<br>
+        云端只存设置、收藏、标记和自定义源，不存浏览记录。`)}
+      ${sec('🛰','抓取失败通知与证书',`某个源没抓到时，顶部会出现粉色通知条：显示失败源、原因，可${k('复制')}、${k('查看详情')}、${k('重试')}、${k('✕')}，默认 10 秒自动关闭。<br>
+        部分站点（政府/统计/期刊）证书链不全，软件已内置容错；想修浏览器端问题，可在 设置 → 证书 里检测并安装（那里有「一键全部检测并安装」）。`)}
+      ${sec('🔄','更新与反馈',`设置 → 关于 里有蓝奏云 / 夸克 / 百度网盘下载入口（蓝奏云自动复制提取码）。<br>
+        用着不顺手、想加站点，欢迎在 设置 → 建议 里告诉我们，无需登录即可提交。`)}`;
+    return;
+  }
+
   if(state.tab==='about'){
     const qr=S.qrImage||'';
     B.innerHTML=`
       <div class="about">
         <div style="display:flex;align-items:center;gap:14px;margin-bottom:12px">
-          <div class="mark" style="width:54px;height:54px;border-radius:15px">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" style="width:27px;height:27px">
-              <circle cx="10.5" cy="10.5" r="6.2"/><path d="m15.2 15.2 4.4 4.4"/></svg>
-          </div>
-          <div><div style="font-size:18px;font-weight:700;color:var(--text)">热榜助手 V6.0</div>
-            <div>作者：<b>七度</b> · 本地运行，不登录不上传</div></div>
+          <div><div style="font-size:18px;font-weight:700;color:var(--text)">热榜助手 V8.0.2</div>
+            <div>作者：<b>七度</b></div></div>
         </div>
         聚合 ${state.cfg.sources.length} 个站点的热榜与资讯，全部数据来自各站点公开页面，仅在本机缓存。<br>
         所有源都可自行开关、改地址、改条数、删除或新增；换地址后依然按该站热度排序。<br><br>
@@ -1339,9 +3569,59 @@ function renderModal(){
           <button class="mini" id="abReload">重新载入界面</button>
           <span style="font-size:11.5px;color:var(--sub);align-self:center">配置目录：${esc(state.cfg.dataDir||'')}</span>
         </div>
+        <div style="height:1px;background:var(--line);margin:16px 0 12px"></div>
+        <b>🌐 网页版（手机 / 平板 / 任意电脑都能用）</b>
+        <div style="font-size:12.5px;color:var(--sub);margin:6px 0 8px">点一下地址即自动复制并跳转，可直接分享给朋友</div>
+        <div class="ad-qv" id="webAddr" style="display:inline-block;margin-bottom:10px">https://rebang-web.app.workbuddy.host/?sharecode=2SURQEZFNL</div>
+        <div style="height:1px;background:var(--line);margin:16px 0 12px"></div>
+        <b>⬇ 软件更新</b>
+        <div style="font-size:12.5px;color:var(--sub);margin:6px 0 8px">最新版本请在以下网盘下载（蓝奏云会自动复制提取码并打开浏览器）</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="mini primary" id="upLanzou">蓝奏云（自动复制密码）</button>
+          <button class="mini" id="upQuark">夸克网盘</button>
+          <button class="mini" id="upBaidu">百度网盘</button>
+        </div>
+        <div style="font-size:11.5px;color:var(--sub);margin-top:6px;line-height:1.8">
+          exe 百度网盘：https://pan.baidu.com/s/1SxP7FeB85dEaFKwT7SqHQw?pwd=2640（提取码 2640）<br>
+          exe 夸克网盘：https://pan.quark.cn/s/94df9d49591f
+        </div>
+        <div style="height:1px;background:var(--line);margin:16px 0 12px"></div>
+        <b>🧩 开发者其他软件</b>
+        <div class="about" style="margin-top:8px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--panel2)">
+          <div style="font-weight:700;color:var(--text)">美拍姿势库 <span style="font-weight:400;font-size:12px;color:var(--sub)">（安卓 APP）</span></div>
+          <div style="font-size:12.5px;color:var(--sub);line-height:1.9;margin-top:6px">
+            专为「告别拍照尴尬，记录每一份美好」的人做的安卓拍照姿势图库。内置 1700+ 张真人姿势原图，
+            按单人、情侣、闺蜜、亲子、室内外场景等 18 个分类整理；图片全部原图直读、不压缩，滑起来跟本地相册一样顺。
+            打开一张姿势卡，照着画面里的人物站位、手部动作和机位角度摆好，按下快门就行；每张图配一句拍摄技巧，
+            还能一键收藏、镜像、标记「学会」，每天打卡记录自己的进步。<b style="color:var(--text)">不用注册、没有广告，装上就能用</b>；
+            所有图片不需要网络即可使用，仅反馈意见联网上传。
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+            <button class="mini primary" id="mpBaidu">百度网盘下载</button>
+          </div>
+          <div style="font-size:11.5px;color:var(--sub);margin-top:6px;line-height:1.8">
+            百度网盘：https://pan.baidu.com/s/5gZ0hq4QQPHVSmFj_XYwnnA
+          </div>
+        </div>
       </div>`;
     B.querySelector('#abQuit').onclick=()=>{ if(confirm('退出热榜助手？')){ api('/api/quit'); setTimeout(()=>window.close(),300);} };
     B.querySelector('#abReload').onclick=()=>location.reload();
+    /* M8.0：软件更新 —— 蓝奏云自动复制提取码再打开网页 */
+    const openExt=u=>{ try{ window.open(u,'_blank'); }catch(e){} };
+    B.querySelector('#upLanzou').onclick=()=>{
+      const pwd='i4a4';
+      const done=()=>{ toast('提取码 '+pwd+' 已复制，正在打开蓝奏云…'); openExt('https://wwbmz.lanzoul.com/b0fqtcmfa'); };
+      if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(pwd).then(done,done);
+      else done();
+    };
+    B.querySelector('#upQuark').onclick=()=>openExt('https://pan.quark.cn/s/94df9d49591f');
+    B.querySelector('#upBaidu').onclick=()=>openExt('https://pan.baidu.com/s/1SxP7FeB85dEaFKwT7SqHQw?pwd=2640');
+    /* V7.9.3：美拍姿势库 网盘下载 */
+    const mpB=B.querySelector('#mpBaidu');
+    if(mpB) mpB.onclick=()=>openExt('https://pan.baidu.com/s/5gZ0hq4QQPHVSmFj_XYwnnA');
+    /* V7.9.3：网页版地址 —— 点一下自动复制 + 跳转 */
+    const wa=B.querySelector('#webAddr');
+    if(wa) wa.onclick=()=>{ const u=WEB_URL; copyText(u); openExt(u); };
   }
 }
 
@@ -1358,6 +3638,7 @@ $('#q').onkeydown=e=>{
 $('#segLayout').querySelectorAll('button').forEach(b=>b.onclick=()=>{
   state.layout=b.dataset.v; localStorage.setItem('hb_layout',state.layout); render();
 });
+$('#btnFit').onclick=()=>boardAutoFit();
 $('#navAll').onclick=()=>{ state.view='all'; renderSidebar(); render(); };
 $('#navFav').onclick=()=>{ state.view='fav'; renderSidebar(); render(); };
 $('#navHist').onclick=()=>{ state.view='hist'; renderSidebar(); render(); };
@@ -1381,10 +3662,11 @@ function setupAuto(){
 }
 
 /* 启动检测：强制刷新，失败源自动隐藏，可一键恢复 */
+/* 启动检测：先缓存秒开 → 后台强制刷新 → 失败源自动隐藏，可一键恢复 */
 function startupDetect(){
-  const list=enabled();
+  const list=fetchable();
   if(!list.length) return;
-  loadSources(list,true).then(()=>{
+  const check=()=>{
     if(state.cfg.settings.startupCheck===false) return;
     const bad=list.filter(s=>(state.data[s.id]||{}).error);
     if(bad.length && state.cfg.settings.srcLocked){
@@ -1392,13 +3674,18 @@ function startupDetect(){
       toast(bad.length+' 个源启动检测失败（已锁定，未自动隐藏）');
     }else if(bad.length){
       state.autoHidden=bad.map(s=>({id:s.id,name:s.name}));
-      state.autoHiddenAt=Date.now();   // 通知条 4 秒后自动关闭
+      state.autoHiddenAt=Date.now();   // V7.9.3：不重置「已关闭」标记，用户关掉后本次运行不再弹
       bad.forEach(s=>s.enabled=false);
       saveCfg(); renderSidebar(); render();
       toast(bad.length+' 个源启动检测失败，已自动隐藏');
     }else{
       state.autoHidden=[];
     }
+  };
+  /* V7.9.3：第一轮「不强制」——有缓存就毫秒级返回并立刻上屏；
+     随后再补一轮强制抓取（后台跑，不挡界面），抓完再做失败源检测。 */
+  loadSources(list,false).finally(()=>{
+    setTimeout(()=>{ loadSources(list,true).then(check).catch(()=>{}); }, 400);
   });
 }
 function restoreHidden(){
@@ -1411,15 +3698,154 @@ function restoreHidden(){
   toast('已恢复 '+back.length+' 个源');
 }
 
-api('/api/config').then(cfg=>{
-  state.cfg=cfg; state.favs=cfg.favorites||[]; state.hist=cfg.history||[];
-  /* 一次性迁移：默认每源条数 / 看板条数改为 10（仅当还是旧默认值时） */
-  if(!localStorage.getItem('hb_vc5')){
-    const S=state.cfg.settings;
-    if(+S.perSource===30){ S.perSource=10; state.cfg.sources.forEach(s=>{ s.count=10; }); }
-    if(!S.boardCount||+S.boardCount===15) S.boardCount=10;
-    localStorage.setItem('hb_vc5','1'); saveCfg();
+/* ============ M8.2：手机 UA（Android / iPhone）自动套用 APK 版排版 ============ */
+const MI={
+  board:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.6"/></svg>',
+  list:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6.5h16"/><path d="M4 12h16"/><path d="M4 17.5h16"/></svg>',
+  more:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg>'
+};
+function isMobileUA(){
+  const ua=navigator.userAgent||'';
+  return /Android|iPhone|iPod|iPad|Mobile|HarmonyOS|OpenHarmony/i.test(ua);
+}
+function openSideM(){ const sb=$('#sidebar'); if(sb) sb.classList.add('open'); document.body.classList.add('rbSide'); }
+function closeSideM(){ const sb=$('#sidebar'); if(sb) sb.classList.remove('open'); document.body.classList.remove('rbSide'); }
+function toggleSideM(){ document.body.classList.contains('rbSide')?closeSideM():openSideM(); }
+function buildRailM(){
+  let rail=$('#rbRail');
+  if(!rail){ rail=document.createElement('div'); rail.id='rbRail'; document.body.appendChild(rail); }
+  ['btnTts','btnRefresh','btnTr','btnSet2'].forEach(id=>{
+    const b=$('#'+id); if(!b||b.parentNode===rail) return;
+    b.classList.remove('ib'); b.classList.add('ri'); rail.appendChild(b);
+  });
+}
+function isApkShell(){
+  /* Android WebView（APK 壳）的 UA 带 wv 标记；这种由 shell.js 排版，本函数不介入 */
+  const ua=navigator.userAgent||'';
+  return /\bwv\b/i.test(ua) || /RebangApp/i.test(ua);
+}
+function initMobileView(){
+  /* APK 端排版已经由壳层（shell.js/css）负责且用户确认没问题，这里完全不动；
+     只有「手机浏览器打开网页版」才套用 APK 版排版 */
+  if(isApkShell()) return;
+  if(!isMobileUA()) return;
+  document.body.classList.add('rb-m');
+  const tb=document.querySelector('.topbar'); if(!tb) return;
+  /* 1) 视图切换只留图标 */
+  const seg=$('#segLayout');
+  if(seg&&!seg.dataset.mIco){
+    seg.dataset.mIco='1';
+    const b1=seg.querySelector('[data-v="board"]'), b2=seg.querySelector('[data-v="list"]');
+    if(b1){ b1.innerHTML=MI.board; b1.title='总览看板'; b1.setAttribute('aria-label','总览看板'); }
+    if(b2){ b2.innerHTML=MI.list; b2.title='列表'; b2.setAttribute('aria-label','列表'); }
   }
+  /* 2) 搜索框缩成一个图标，点开才展开 */
+  const box=document.querySelector('.search');
+  if(box&&!box.dataset.mMini){
+    box.dataset.mMini='1';
+    box.addEventListener('click',e=>{
+      if(box.classList.contains('rbOpen')) return;
+      e.preventDefault(); box.classList.add('rbOpen');
+      const inp=$('#q'); if(inp) setTimeout(()=>{ try{ inp.focus(); }catch(_e){} },60);
+    },true);
+    const inp=$('#q');
+    if(inp){
+      inp.addEventListener('blur',()=>setTimeout(()=>{ if(!inp.value) box.classList.remove('rbOpen'); },120));
+      inp.addEventListener('keydown',e=>{ if(e.key==='Escape'){ box.classList.remove('rbOpen'); inp.blur(); } });
+    }
+  }
+  /* 3) 侧边栏按钮固定在左上角 */
+  if(!$('#rbMenu')){
+    const m=document.createElement('button');
+    m.id='rbMenu'; m.className='ib'; m.title='菜单'; m.setAttribute('aria-label','侧边栏');
+    m.innerHTML=MI.more;
+    m.onclick=e=>{ e.stopPropagation(); toggleSideM(); };
+    tb.insertBefore(m,tb.firstChild);
+  }
+  if(!$('#rbSideMask')){
+    const mk=document.createElement('div'); mk.id='rbSideMask';
+    mk.onclick=closeSideM; document.body.appendChild(mk);
+  }
+  ['#navAll','#navFav','#navHist','#catRow','#srcList','#btnAdd','#btnSet'].forEach(sel=>{
+    const n=$(sel); if(n) n.addEventListener('click',()=>setTimeout(closeSideM,140));
+  });
+  /* 触摸菜单栏（侧栏）以外的地方自动收起 */
+  document.addEventListener('click',e=>{
+    if(!document.body.classList.contains('rbSide')) return;
+    const sb=$('#sidebar');
+    if(sb&&sb.contains(e.target)) return;
+    if(e.target.closest&&e.target.closest('#rbMenu')) return;
+    closeSideM();
+  },true);
+  /* 4) 朗读 / 刷新 / 翻译 / 设置 收进右下悬浮竖排 */
+  buildRailM();
+}
+initMobileView();
+
+api('/api/config').then(cfg=>{
+  /* M9.2：页面被缓存（APK 的 WebView / 浏览器旧标签）时，服务端版本更高就强制刷新一次。
+     之前用户遇到的「侧边栏没隐藏分类、设置里只有 13 个分类、综合源数暴涨」都是旧页面造成的。 */
+  try{
+    const _sv=String((cfg&&cfg.app)||'').replace(/^V/i,'');
+    const _lv=String(APP_VER||'').replace(/^V/i,'');
+    if(_sv && _lv && _sv!==_lv && !sessionStorage.getItem('hb_reload_'+_sv)){
+      sessionStorage.setItem('hb_reload_'+_sv,'1');
+      const _u=location.pathname+'?v='+encodeURIComponent(_sv)+location.hash;
+      location.replace(_u); return;
+    }
+  }catch(e){}
+  state.cfg=cfg; state.favs=cfg.favorites||[]; state.hist=cfg.history||[];
+  /* V7.9.3：本机设置习惯优先（网页版/云端实例重启后服务端配置可能回默认，本地这份兜住）
+     V8.0.1 修正：本机那份是旧版留下的（比如 hideCats 还是空的/旧的 15 个）时，会把服务端
+     迁移好的「默认隐藏 17 分类」覆盖掉 —— 表现就是侧边栏又冒出那 17 个分类。
+     所以「隐藏清单」改成 服务端 ∪ 本机 −（用户明确恢复过的），绝不让旧副本把隐藏项顶回去。 */
+  try{
+    const ls=JSON.parse(localStorage.getItem('hb_cfg_local')||'null');
+    if(ls&&typeof ls==='object'){
+      AD_KEYS.forEach(k=>{ delete ls[k]; });
+      const sv=state.cfg.settings||{};
+      const svHide=Array.isArray(sv.hideCats)?sv.hideCats:[];
+      const lcHide=Array.isArray(ls.hideCats)?ls.hideCats:[];
+      const unh=[].concat(Array.isArray(sv.unhideCats)?sv.unhideCats:[],
+                          Array.isArray(ls.unhideCats)?ls.unhideCats:[])
+                    .filter(x=>typeof x==='string');
+      state.cfg.settings=Object.assign({},sv,ls);
+      const hid=[];
+      svHide.concat(lcHide).forEach(c=>{
+        if(typeof c==='string' && hid.indexOf(c)<0 && unh.indexOf(c)<0) hid.push(c);
+      });
+      state.cfg.settings.hideCats=hid;
+      state.cfg.settings.unhideCats=unh.filter((c,i)=>unh.indexOf(c)===i);
+      state._hideFix=true;
+    }
+  }catch(e){}
+  /* V8.0.0：exe / 网页版「初次打开」默认值（APK 壳不套用这批默认，保持原样）
+     判据：本机没保存过设置（hb_cfg_local 不存在）+ 不在 APK 里（RebangNative 是 APK 注入的接口） */
+  try{
+    const _isApk=(typeof window.RebangNative!=='undefined');
+    if(!_isApk && !localStorage.getItem('hb_cfg_local')){
+      Object.assign(state.cfg.settings,{
+        boardCols:4, boardRows:2,   // 看板 4 列 2 行
+        translate:'off', titleTrans:false,            // 翻译默认关闭
+        perSource:20, boardCount:15,                 // 每源 20 / 看板每源 15
+        notifySec:0,                                 // 抓取失败提示条默认关闭
+        showOnlyOk:true, startupCheck:true,          // 只显示可用源 / 启动自动检测 默认开启
+        accent:''                                    // 主题配色：经典红
+      });
+    }
+  }catch(e){}
+  refreshCats();   // V6.2 分类以用户配置为准
+  if(state._hideFix){ state._hideFix=false; try{ saveCfg(); }catch(e){} }   // V8.0.1：把合并后的隐藏清单写回
+  /* V7.8.5：启动时从后端本机文件回填百度/有道密钥（localStorage 里没有的那项才回填，本机的更新值优先） */
+  try{ fetch('/api/trans/keys').then(r=>r.json()).then(j=>{
+    const sv=(j&&j.keys)||{};
+    const k=pgTrKeys(); let ch=false;
+    ['baidu','youdao'].forEach(n=>{ if(sv[n]&&!k[n]){ k[n]=sv[n]; ch=true; } });
+    if(ch){ try{ localStorage.setItem('hb_trans_keys',JSON.stringify(k)); }catch(e){} }
+  }).catch(()=>{}); }catch(e){}
+  /* M8.1：默认值改为 每源 20 / 看板 15 / 看板 4 列 2 行（旧的 10/15 迁移逻辑已停用，
+     避免把新默认值又改回 10） */
+  if(!localStorage.getItem('hb_vc5')) localStorage.setItem('hb_vc5','1');
   if(!localStorage.getItem('hb_vc51')){   // V6.0：默认读速 1 → 1.25 倍（老用户一次性迁移）
     const S=state.cfg.settings;
     if(+S.ttsRate===1) S.ttsRate=1.25;
@@ -1437,8 +3863,28 @@ api('/api/config').then(cfg=>{
   applyLook(); applyFontFallback();
   $('#pRate').value=cfg.settings.ttsRate||1.25;
   $('#pRateV').textContent=((v)=>v===1.25?'1.25':v.toFixed(1))(cfg.settings.ttsRate||1.25)+'x';
+  /* V7.9.3：先把上次抓到的内容铺出来（0 请求、0 等待），再让接口补新数据 */
+  const snap=loadSnap();
+  if(snap&&snap.d){
+    Object.keys(snap.d).forEach(k=>{
+      const cur=state.data[k]||{};
+      if(!(cur.items||[]).length && snap.d[k]&&(snap.d[k].items||[]).length) state.data[k]=snap.d[k];
+    });
+  }
   renderCats(); renderSidebar(); render(); setupAuto();
-  startupDetect();   // 启动即强制刷新 + 检测失败源
+  if(snap&&snap.d) document.documentElement.setAttribute('data-snap','1');
+  startupDetect();   // 先读缓存秒开，再后台刷新 + 检测失败源
+  /* 首次使用：提示去哪里看使用指导（含翻译/排序/设置的图解说明） */
+  try{
+    if(!localStorage.getItem('hb_guide_tip')){
+      localStorage.setItem('hb_guide_tip','1');
+      setTimeout(()=>toast('第一次用？右上角 ⚙ 设置 → 使用指导 有完整说明'),1400);
+    }
+  }catch(e){}
+  /* M8.0：启动时恢复登录状态（refresh_token 自动续期）；已登录且云端有配置 → 询问是否覆盖本地 */
+  acctRefresh().then(()=>acctAskCloudCover());
+  /* V7.9.4：推广位内容以作者发布为准（桌面版也走中心服务器，作者改一次全员更新） */
+  syncAd().then(()=>{ if(state.cat==='推广') render(); });
   if(h.startsWith('#set')) openModal(h.includes('sources')?'sources':(h.includes('about')?'about':(h.includes('look')?'look':'general')));
 }).catch(e=>{
   $('#content').innerHTML=`<div class="empty"><div class="big">🔌</div>本地服务未响应<br>${esc(e.message)}</div>`;

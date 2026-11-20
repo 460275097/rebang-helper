@@ -8,11 +8,13 @@
 **在线体验（网页版，手机浏览器直接打开，可添加到主屏幕）**
 👉 https://rebang-web.app.workbuddy.host/?sharecode=2SURQEZFNL
 
-**安卓 App**：下载本仓库的 `热榜助手.apk` 安装，与电脑端功能一致
+**安卓 App**：在下方 [Releases 发布页](https://github.com/460275097/rebang-helper/releases) 下载 `rebang-helper-V8.0.7.apk` 安装，与电脑端功能一致
 
 **网盘下载（备用通道，exe + apk 都在里面）**
 - 百度网盘：https://pan.baidu.com/s/5EsBVle520XFowOUkqzsiyg
 - 夸克网盘：https://pan.quark.cn/s/d3a6b17b96b1
+
+**最新版统一发布页**：https://github.com/460275097/rebang-helper/releases
 
 ![首页截图](首页.png)
 
@@ -324,13 +326,13 @@ python build_all.py
 ## 📥 下载使用
 
 **电脑版（Windows 10 / 11）**
-1. 在本仓库下载 `热榜助手V8.0.7.exe`（约 31 MB），或从上面的网盘链接下载
+1. 到 [Releases 发布页](https://github.com/460275097/rebang-helper/releases) 下载 `rebang-helper-V8.0.7.exe`（约 31 MB），或从上面的网盘链接下载
 2. 双击运行即可，绿色免安装
 3. 如被杀毒软件提示（未签名的免费小软件常见情况），添加信任即可，软件无任何恶意行为
 4. 老版本用户直接运行新版，配置和收藏自动保留（新版启动会自动关闭正在运行的旧版）
 
 **安卓版**
-1. 下载本仓库的 `热榜助手.apk`（约 21 MB，版本 8.0.7 / versionCode 80007），或从网盘下载
+1. 到 Releases 发布页下载 `rebang-helper-V8.0.7.apk`（约 21 MB，版本 8.0.7 / versionCode 80007），或从网盘下载
 2. 安装时如提示「未知来源应用」，允许一次即可
 3. 与电脑端功能一致，收藏可云端同步
 

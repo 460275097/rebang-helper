@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>热榜助手 V8.0.2</title>
+<title>热榜助手</title>
 <style>
 :root{
   --bg:#f2f3f5; --panel:#ffffff; --panel2:#fafbfc; --text:#14171c; --sub:#6d7683;
@@ -95,6 +95,17 @@ svg{display:block}
   background:var(--panel);color:var(--sub);font-size:9px;line-height:1;cursor:pointer;display:grid;place-items:center}
 .src-item .mv button:hover{color:#fff;background:var(--blue);border-color:var(--blue)}
 .src-item .mv button:disabled{opacity:.3;cursor:default;background:var(--panel);color:var(--sub);border-color:var(--line)}
+/* V8.0.5：侧栏「校对」按钮（头部 + 源行，点击打开该校准界面） */
+.side-label .sl-right{display:flex;align-items:center;gap:6px;flex:none}
+.side-label #btnCalibSide{width:26px;height:20px;padding:0;border-radius:5px;border:1px solid var(--line);
+  background:color-mix(in srgb,var(--blue) 10%,var(--panel2));color:var(--blue);font-size:11.5px;font-weight:600;
+  cursor:pointer;line-height:1;flex:none}
+.side-label #btnCalibSide:hover{background:var(--blue);color:#fff;border-color:var(--blue)}
+.src-item .mv button[data-cal]{color:var(--blue);font-weight:600}
+/* V8.0.5：手机/触屏没有 hover —— 源行常显「校」按钮（上移/下移在手机上仍隐藏，防溢出） */
+body.rb-m .src-item .mv{display:flex}
+body.rb-m .src-item .mv button[data-mv]{display:none}
+body.rb-m .src-item .mv button[data-cal]{width:20px;height:18px;font-size:10px}
 /* V7.9.1：分类页签选中时出现的 ‹ › 排序按钮（单击即生效） */
 #catRow button .cmv{display:inline-grid;place-items:center;width:15px;height:15px;margin-left:3px;border-radius:4px;
   font-style:normal;font-size:11px;line-height:1;background:color-mix(in srgb,var(--blue) 16%,transparent);
@@ -119,6 +130,11 @@ svg{display:block}
 .tb-title{font-size:17px;font-weight:700;display:flex;align-items:baseline;gap:8px;min-width:0;max-width:34%}
 .tb-title span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tb-title .n{font-size:11.5px;font-weight:500;color:var(--sub);flex:none}
+/* V8.0.4：单源视图的「修改 / 更多」小按钮 */
+.srcops{display:flex;gap:5px;flex:none}
+.srcops button{padding:3px 8px;font-size:11.5px;white-space:nowrap}
+body.rb-m .srcops button{padding:3px 7px;font-size:11px}
+body.rb-m .tb-title{max-width:42%}
 .spacer{flex:1}
 .search{display:flex;align-items:center;gap:6px;background:var(--panel2);border:1px solid var(--line);
   border-radius:9px;padding:6px 9px;width:186px;transition:.15s}
@@ -225,10 +241,23 @@ body.rb-resizing *{user-select:none !important}
   border-bottom:1px solid var(--line2);cursor:pointer;background:transparent}
 .bhead:hover{background:var(--panel2)}
 .bhead .bdot{width:8px;height:8px;border-radius:3px;background:var(--blue);flex:none}
-.bhead .bnm{font-weight:700;font-size:calc(var(--fs)*.9);color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.bhead .bbadge{flex:none;font-size:calc(var(--fs)*.7);padding:1.5px 7px;border-radius:6px;
+.bhead .bnm{font-weight:700;font-size:calc(var(--fs)*.9);color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1 1 auto;min-width:26px}
+.bhead .bbadge{flex:0 1 auto;min-width:0;max-width:38%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:calc(var(--fs)*.7);padding:1.5px 7px;border-radius:6px;
   background:color-mix(in srgb,var(--blue) 11%,transparent);color:var(--blue)}
 .bhead .bcnt{margin-left:auto;flex:none;font-size:calc(var(--fs)*.733);color:var(--sub)}
+/* V8.0.4：看板卡片右上角「修改新闻源 / 更多」——不改去看板，就地弹出校准界面 */
+.bhead .bact{flex:none;display:flex;gap:3px;margin-left:2px;opacity:.55;transition:opacity .15s}
+.bcard:hover .bhead .bact{opacity:1}
+.bhead .bact button{width:22px;height:22px;padding:0;border:1px solid var(--line);border-radius:6px;
+  background:var(--panel);color:var(--sub);font-size:12px;line-height:1;cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center}
+.bhead .bact button:hover{color:var(--blue);border-color:var(--blue);
+  background:color-mix(in srgb,var(--blue) 10%,var(--panel))}
+body.rb-m .bhead .bact{opacity:1}
+body.rb-m .bhead .bact button{width:26px;height:26px;font-size:13px}
+/* 手机窄卡片：分类徽章和条数让位给「名称 + 修改/更多」，避免挤成一团 */
+body.rb-m .bhead .bbadge{display:none}
+body.rb-m .bhead .bcnt{font-size:11px}
 .bbody{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain}
 .bbody::-webkit-scrollbar{width:6px}
 .bbody::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
@@ -501,6 +530,50 @@ body.rb-m .rows{padding:0!important}
 body.rb-m .row{padding:8px 10px!important;gap:8px!important}
 body.rb-m .row .tt{font-size:13.5px!important;line-height:1.4!important}
 body.rb-m .row .heat{display:none!important}
+/* ============ V8.1：新闻源校准向导（桌面/移动通用，移动端紧凑排版） ============ */
+.calibov{position:fixed;inset:0;z-index:120;background:rgba(15,18,24,.45);display:flex;align-items:center;justify-content:center;padding:10px}
+.calibpn{background:var(--panel);border:1px solid var(--line);border-radius:14px;width:min(620px,100%);
+  max-height:calc(100vh - 40px);max-height:calc(100dvh - 40px);display:flex;flex-direction:column;overflow:hidden;
+  box-shadow:0 24px 70px -20px rgba(0,0,0,.55)}
+.calibpn .cHead{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--line);flex:0 0 auto}
+.calibpn .cHead b{font-size:14.5px}
+.calibpn .cHead .mini{margin-left:auto}
+.calibpn .cUrlRow{display:flex;gap:8px;padding:10px 14px 0;flex:0 0 auto}
+.calibpn .cUrlRow input{flex:1;min-width:0;border:1px solid var(--line);background:var(--panel2);border-radius:8px;padding:7px 9px;font-size:13px;color:var(--text)}
+.calibpn .cTip{padding:7px 14px;font-size:11.5px;color:var(--sub);flex:0 0 auto;line-height:1.5}
+.calibpn .cList{flex:1 1 auto;min-height:0;overflow:auto;overscroll-behavior:contain;padding:8px 14px;-webkit-overflow-scrolling:touch}
+.calibpn .cFoot{flex:0 0 auto;display:flex;gap:8px;align-items:center;padding:10px 14px;border-top:1px solid var(--line)}
+.calibpn .cMsg{font-size:12px;color:var(--sub)}
+.cand{border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin-bottom:8px;background:var(--panel2);cursor:pointer}
+.cand.on{border-color:var(--blue);box-shadow:0 0 0 1px var(--blue) inset}
+.cand .cT{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:12px;color:var(--sub)}
+.cand .cT .bdg{font-size:11px;padding:1px 7px;border-radius:20px;background:var(--panel);border:1px solid var(--line)}
+.cand .cT .bdg.ok{color:#0e9f6e;border-color:#0e9f6e55}
+.cand .cT .bdg.warn{color:#e04438;border-color:#e0443855}
+.cand .cS{margin:5px 0 0;font-size:12.5px;color:var(--text);line-height:1.55}
+.cand .cS div{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cand .cS div::before{content:"· ";color:var(--sub)}
+.cand .cPrev{margin-top:6px;border-top:1px dashed var(--line);padding-top:5px;font-size:11.5px;color:var(--sub)}
+.cand .cErr{color:#e04438;font-size:12px;padding:6px 2px}
+body.rb-m .calibov{padding:6px;align-items:flex-end}
+body.rb-m .calibpn{width:100%;max-height:calc(100dvh - 24px);border-radius:14px 14px 0 0}
+body.rb-m .calibpn .cHead{padding:9px 12px}
+body.rb-m .calibpn .cUrlRow{padding:8px 12px 0}
+body.rb-m .calibpn .cUrlRow input{font-size:16px}
+body.rb-m .calibpn .cTip{padding:5px 12px;font-size:11px}
+body.rb-m .calibpn .cList{padding:6px 10px}
+body.rb-m .calibpn .cFoot{padding:8px 12px;padding-bottom:calc(8px + env(safe-area-inset-bottom,0px))}
+body.rb-m .cand{padding:7px 9px}
+/* 移动端：设置弹窗源行紧凑化（URL 独占一行换行显示，防小屏横向溢出显示不全） */
+body.rb-m .srcrow{gap:5px;padding:7px 7px;flex-wrap:wrap;row-gap:5px}
+body.rb-m .srcrow .nm{width:70px;font-size:12px}
+body.rb-m .srcrow input.url{order:8;flex:1 1 100%;min-width:0;font-size:12px;padding:5px 6px}
+body.rb-m .srcrow input.num{width:40px;flex:none}
+body.rb-m .srcrow .ops button{width:26px;height:26px;font-size:11px}
+/* 手机上隐藏上移/下移（排序用拖拽），保证整行不横向溢出 */
+body.rb-m .srcrow .ops button[data-a="up"],
+body.rb-m .srcrow .ops button[data-a="down"]{display:none}
+body.rb-m .srcrow .catsel{font-size:11px;padding:3px 6px;max-width:88px}
 /* 抽屉遮罩 */
 #rbSideMask{position:fixed;inset:0;z-index:59;display:none;background:rgba(10,14,20,.42)}
 body.rbSide #rbSideMask{display:block}
@@ -512,7 +585,7 @@ body.rb-m .sidebar{box-shadow:0 0 40px rgba(0,0,0,.3)}
   <aside class="sidebar" id="sidebar">
     <div class="brand">
       <div>
-        <h1>热榜助手<span class="ver">V8.0.0</span></h1>
+        <h1>热榜助手<span class="ver"></span></h1>
         <div class="by">作者：七度</div>
         <div class="by" style="font-size:11px;opacity:.72;line-height:1.5;margin-top:2px">愿你的信息流清爽一点，别再被推荐算法牵着走。</div>
       </div>
@@ -532,7 +605,9 @@ body.rb-m .sidebar{box-shadow:0 0 40px rgba(0,0,0,.3)}
 
     <div class="cat-row" id="catRow"></div>
 
-    <div class="side-label"><span id="srcLabel">新闻源 · 可拖动排序</span><span id="srcCount"></span></div>
+    <div class="side-label"><span id="srcLabel">新闻源 · 可拖动排序</span>
+      <span class="sl-right"><span id="srcCount"></span>
+        <button id="btnCalibSide" title="校对新闻源：检查标题提取是否正确；错了可换地址或重新识别">校</button></span></div>
     <div class="src-list" id="srcList"></div>
     <div class="side-foot">
       <button id="btnAdd" class="primary">＋ 添加源</button>
@@ -971,7 +1046,26 @@ function bindCmDrag(cm,reCM){
 function fmtTime(ts){ if(!ts)return '—'; const d=new Date(ts*1000),n=new Date();
   const hm=d.toTimeString().slice(0,5);
   return d.toDateString()===n.toDateString()? hm : (d.getMonth()+1)+'/'+d.getDate()+' '+hm; }
-const api=(p,o)=>fetch(p,o).then(r=>r.json());
+/* V8.0.6：api 加固——响应不是 JSON（网关超时/服务重启）或网络抖动时自动重试一次，
+   并把失败原因抛给调用方显示，前端不再笼统报「网络错误」 */
+const api=(p,o)=>{
+  const once=()=>fetch(p,o).then(r=>r.text()).then(t=>{
+    try{ return JSON.parse(t); }
+    catch(e){ throw new Error('服务返回异常(HTTP '+r.status+')，请重试'); }
+  });
+  const doIt=()=>once().catch(e=>{
+    const m=String((e&&e.message)||e);
+    const isGet=!o||!o.method||String(o.method).toUpperCase()==='GET';
+    const bad=m.indexOf('Failed to fetch')>=0||m.indexOf('NetworkError')>=0||m.indexOf('服务返回异常')>=0||m.indexOf('load failed')>=0;
+    if(isGet&&bad){
+      return new Promise(res=>setTimeout(res,700)).then(once).catch(e2=>{
+        throw new Error('服务无响应，请稍后重试（'+String((e2&&e2.message)||e2).slice(0,70)+'）');
+      });
+    }
+    throw (e instanceof Error)?e:new Error(m);
+  });
+  return doIt();
+};
 
 function saveCfg(){ clearTimeout(state._sv);
   /* V7.9.3：设置双写——服务端配置文件 + 本机 localStorage，
@@ -1110,6 +1204,12 @@ async function openSourceSite(s){
   const ok=await openInBrowser(u);
   toast(ok?('已在浏览器打开 '+(host||u)):('打不开这个地址：'+u));
 }
+/* V8.0.5：打开某个源的校准界面（侧边栏「校」按钮 / 单源视图「修改」共用） */
+function calibSource(s){
+  if(!s){ toast('先在左侧点一个新闻源，再点「校」'); return; }
+  try{ openCalib(s, ()=>{ loadSources([s],true); renderSidebar(); render(); }); }
+  catch(err){ toast('打不开校准界面：'+((err&&err.message)||err)); }
+}
 
 function renderSidebar(){
   const box=$('#srcList'); box.innerHTML='';
@@ -1126,13 +1226,22 @@ function renderSidebar(){
     row.dataset.id=s.id;
     row.innerHTML=`<span class="dot"></span><span class="nm">${esc(s.name)}</span>
       <span class="cnt">${d.items&&d.items.length?d.items.length:'·'}</span>
-      <span class="mv"><button data-mv="-1" title="上移一位">▲</button><button data-mv="1" title="下移一位">▼</button></span>
+      <span class="mv"><button data-cal="1" title="校对：检查这个源提取的标题对不对">校</button><button data-mv="-1" title="上移一位">▲</button><button data-mv="1" title="下移一位">▼</button></span>
       <span class="sw on" title="点击隐藏该源"></span>`;
     row.onclick=e=>{
+      const cal=e.target.closest && e.target.closest('[data-cal]');
+      if(cal){ e.stopPropagation(); calibSource(s); return; }        // V8.0.5：行内校对按钮
       const mv=e.target.closest && e.target.closest('[data-mv]');
       if(mv){ e.stopPropagation(); moveSourceStep(s.id, +mv.dataset.mv, true); return; }   // V7.9.1：一键上移/下移
       if(e.target.classList.contains('sw')){ s.enabled=false; saveCfg(); renderSidebar(); render(); return; }
-      state.view=s.id; renderSidebar(); render();
+      const _same = state.view===s.id;
+      state.view=s.id;
+      /* V8.0.5：点击侧边栏的源 → 自动置顶（移到列表最前并保存顺序），下次打开仍在顶部 */
+      if(!_same){
+        const arr=state.cfg.sources, i=arr.indexOf(s);
+        if(i>0){ arr.splice(i,1); arr.unshift(s); saveCfg(); }
+      }
+      renderSidebar(); render();
     };
     /* V7.9.5：点圆点 = 用浏览器打开该源官网（不切换当前视图） */
     const dot=row.querySelector('.dot');
@@ -1704,13 +1813,21 @@ function renderCats(){
   // 自愈：隐藏清单可能包含正在看的分类 → 回退「全部」
   if(state.cat!=='__top' && state.cat!=='__region' && visibleCatsList().indexOf(state.cat)<0) state.cat='全部';
   const shown = enabled();
-  box.innerHTML = visibleCatsList().map(c=>{
-    const n = c==='全部' ? shown.length : shown.filter(s=>catHas(s,c)).length;
+  /* V8.0.5：已隐藏分类不再占位；可用源为 0 的分类也收起（当前选中的分类始终保留，方便调整顺序） */
+  const _cnt = c => c==='全部' ? shown.length : shown.filter(s=>catHas(s,c)).length;
+  const _hidN=hiddenCats().filter(c=>catsOnly().indexOf(c)>=0).length
+    + ((typeof hasRegion==='function'&&hasRegion()&&hiddenCats().indexOf('本地')>=0)?1:0);
+  box.innerHTML = visibleCatsList().filter(c=>{
+    if(c==='全部' || state.cat===c) return true;
+    return _cnt(c) > 0;
+  }).map(c=>{
+    const n = _cnt(c);
     const mv = (state.cat===c && c!=='全部')
       ? `<i class="cmv" data-cmv="-1" title="左移一位（调整分类顺序）">‹</i><i class="cmv" data-cmv="1" title="右移一位（调整分类顺序）">›</i>`
       : '';
     return `<button data-c="${c}" class="${state.cat===c?'on':''}" title="${c==='全部'?'全部分类':'可把源行拖到这里换分组；选中后出现 ‹ › 可左右移动排序'}">${c}<em>${n}</em>${mv}</button>`;
   }).join('')
+    + (_hidN>0 ? `<button data-c="__hidden" class="${state.cat==='__hidden'?'on':''}" title="查看已隐藏的分类：可恢复显示或彻底删除">🚫 已隐藏 ${_hidN}</button>` : '')
     + (regionVisible() ? `<button data-c="__region" class="${state.cat==='__region'?'on':''}" title="使用者设置的本地（省/市），在设置里添加；可在 设置→分类管理 隐藏/删除">本地</button>` : '')
     + `<button data-c="__top" class="${state.cat==='__top'?'on':''}" title="全部源按阅读/评论/热度合并排序">总排行</button>`
     + `<span id="catHideDrop" style="display:none;flex:none;align-self:center;padding:2px 10px;border-radius:8px;font-size:12px;color:#fff;background:#e04438;opacity:.85">🚫 松手隐藏该分类</span>`
@@ -1719,9 +1836,78 @@ function renderCats(){
     b.onclick=e=>{
       const mvBtn=e.target.closest&&e.target.closest('[data-cmv]');
       if(mvBtn){ e.preventDefault(); e.stopPropagation(); moveCatStep(b.dataset.c,parseInt(mvBtn.dataset.cmv,10)); return; }
+      if(b.dataset.c==='__hidden'){ openHiddenCats(); return; }   // V8.0.6：已隐藏分类管理
       state.cat=b.dataset.c; state.view='all'; state.layout='board'; renderCats(); renderSidebar(); render();   // 点分类立即切到该分类的总览看板
     };
   });
+}
+
+/* V8.0.6：已隐藏分类管理弹层——侧边栏/顶部分类条直接恢复显示或删除，
+   与 设置→分类管理 的隐藏专区同一套动作（恢复时连带开启该分类的源） */
+function openHiddenCats(){
+  document.querySelectorAll('.hidov').forEach(n=>n.remove());
+  const ov=el('div','hidov');
+  ov.style.cssText='position:fixed;inset:0;z-index:1200;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:16px';
+  const card=el('div');
+  card.style.cssText='background:var(--card,#fff);color:var(--text,#222);border-radius:14px;max-width:520px;width:100%;max-height:78vh;overflow:auto;padding:16px 18px;box-shadow:0 12px 40px rgba(0,0,0,.25)';
+  ov.appendChild(card);
+  const close=()=>ov.remove();
+  ov.addEventListener('click',e=>{ if(e.target===ov) close(); });
+  const render=()=>{
+    const hid=hiddenCats();
+    const list=catsOnly().filter(c=>hid.indexOf(c)>=0);
+    const locHid=(typeof hasRegion==='function'&&hasRegion()&&hid.indexOf('本地')>=0);
+    card.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <b style="font-size:15px">🚫 已隐藏的分类（${list.length+(locHid?1:0)}）</b>
+        <button class="mini" data-x style="padding:2px 10px">✕ 关闭</button></div>
+      <div style="font-size:12px;color:var(--sub);line-height:1.7;margin-bottom:10px">
+        这些分类不显示在导航栏、里面的源不抓取。点「恢复显示」回到导航栏并开启该分类的源；点「删除」把分类连同源一起移除。</div>`
+      +(locHid?`<div class="hrow" data-c="本地" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:10px;background:color-mix(in srgb,var(--sub) 10%,transparent);margin-bottom:6px">
+          <b style="flex:1;font-size:13px">本地</b>
+          <button class="mini" data-show="本地" style="padding:3px 10px">👁 恢复显示</button>
+          <button class="mini danger" data-hdel="本地" style="padding:3px 10px">🗑 删除</button></div>`:'')
+      +(list.length?list.map(c=>{
+          const n=state.cfg.sources.filter(s=>catHas(s,c)).length;
+          return `<div class="hrow" data-c="${esc(c)}" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:10px;background:color-mix(in srgb,var(--sub) 10%,transparent);margin-bottom:6px">
+            <b style="flex:1;font-size:13px">${esc(c)}</b>
+            <span style="font-size:11.5px;color:var(--sub)">${n} 个源</span>
+            <button class="mini" data-show="${esc(c)}" style="padding:3px 10px">👁 恢复显示</button>
+            <button class="mini danger" data-hdel="${esc(c)}" style="padding:3px 10px">🗑 删除</button></div>`;
+        }).join(''):(!locHid?'<div style="color:var(--sub);font-size:12.5px;padding:8px 2px">目前没有隐藏的分类。</div>':''));
+    card.querySelector('[data-x]').onclick=close;
+    card.querySelectorAll('[data-show]').forEach(b=>b.onclick=()=>{
+      const c=b.dataset.show;
+      setHiddenCat(c,false);
+      const st=(state.cfg.settings=state.cfg.settings||{});
+      const un=Array.isArray(st.unhideCats)?st.unhideCats:[];
+      if(un.indexOf(c)<0) un.push(c);
+      st.unhideCats=un;
+      let on=0;
+      if(c!=='本地'){ state.cfg.sources.forEach(s=>{ if(catHas(s,c)&&!s.enabled){ s.enabled=true; on++; } }); }
+      saveCfg(); refreshCats(); renderCats(); renderSidebar(); render();
+      if(typeof renderCM==='function') renderCM();
+      toast('已恢复「'+c+'」'+(on?('，并开启 '+on+' 个源'):''));
+      render();
+    });
+    card.querySelectorAll('[data-hdel]').forEach(b=>b.onclick=()=>{
+      const c=b.dataset.hdel;
+      if(c==='本地'){ if(!confirm('删除「本地」分类？已设置的地区会被清空。')) return; clearRegion(); render(); return; }
+      const n=state.cfg.sources.filter(s=>srcCat(s)===c).length;
+      if(!confirm('删除分类「'+c+'」及里面的 '+n+' 个源？\n\n删除后该分类和这些源都不再出现在清单里、也不再抓取（可先用「导出源」留底）。')) return;
+      state.cfg.sources=state.cfg.sources.filter(s=>srcCat(s)!==c);
+      const st=(state.cfg.settings=state.cfg.settings||{});
+      st.cats=(st.cats||[]).filter(x=>x!==c);
+      st.hideCats=(st.hideCats||[]).filter(x=>x!==c);
+      if(state.cat===c) state.cat='全部';
+      if(state.view&&state.view!=='all'&&!state.cfg.sources.some(s=>s.id===state.view)) state.view='all';
+      saveCfg(); refreshCats(); renderCats(); renderSidebar(); render();
+      if(typeof renderCM==='function') renderCM();
+      toast('已删除分类「'+c+'」及 '+n+' 个源');
+      render();
+    });
+  };
+  render();
+  document.body.appendChild(ov);
 }
 
 function render(){
@@ -1747,6 +1933,19 @@ function render(){
   $('#navAll').classList.toggle('on',state.view==='all');
   $('#navFav').classList.toggle('on',state.view==='fav');
   $('#navHist').classList.toggle('on',state.view==='hist');
+
+  /* V8.0.4：单源视图顶栏加「修改新闻源 / 更多」——不用回设置页翻列表 */
+  const _oldOps=$('#srcOps'); if(_oldOps) _oldOps.remove();
+  const _curSrc=(!agg && state.view!=='fav' && state.view!=='hist')
+      ? state.cfg.sources.find(x=>x.id===state.view) : null;
+  if(_curSrc){
+    const _o=el('div','srcops'); _o.id='srcOps';
+    _o.innerHTML=`<button class="mini" data-e title="修改这个新闻源：校准提取规则">✎ 修改</button><button class="mini" data-m title="更多：浏览器打开该站首页">⋯ 更多</button>`;
+    _o.querySelector('[data-e]').onclick=()=>{ try{ openCalib(_curSrc,()=>{ loadSources([_curSrc],true); render(); }); }catch(err){ toast('打不开校准界面：'+err.message); } };
+    _o.querySelector('[data-m]').onclick=()=>openSourceSite(_curSrc);
+    const _tb=document.querySelector('.topbar .tb-title');
+    if(_tb) _tb.insertAdjacentElement('afterend',_o);
+  }
 
   c.innerHTML='';
   const items=currentList();
@@ -1864,7 +2063,8 @@ function render(){
       return `<section class="bcard">
         <div class="bhead" data-sid="${esc(s.id)}" title="点击只看该源">
           <span class="bdot"></span><span class="bnm">${esc(s.name)}</span>
-          <span class="bbadge">${esc(catLabel(s))}</span><span class="bcnt">${per} 条</span></div>
+          <span class="bbadge">${esc(catLabel(s))}</span><span class="bcnt">${per} 条</span>
+          <span class="bact"><button data-edit="${esc(s.id)}" title="修改新闻源：校准提取规则/地址">✎</button><button data-more="${esc(s.id)}" title="更多：在浏览器打开该站">⋯</button></span></div>
         <div class="bbody">${fm.slice(0,per).map((it,i)=>`
         <div class="bitem" title="${esc(it.title)}" data-url="${esc(it.url)}" data-tt="${esc(it.title)}"
              data-src="${esc(s.name)}" data-ht="${esc(it.heatText||'')}">
@@ -1879,6 +2079,21 @@ function render(){
     layoutBoard(g); bindBoardResize(g);
     /* V8.0.0 流畅度：整块看板只挂 2 个委托监听（原先每个条目单独绑定，120+ 面板 × 15 条要挂上千次） */
     g.onclick=e=>{
+      /* V8.0.4：卡片右上角——✎ 就地修改新闻源（弹出校准界面），⋯ 更多（浏览器打开该站） */
+      const ed=e.target.closest&&e.target.closest('[data-edit]');
+      if(ed){
+        const s=state.cfg.sources.find(x=>x.id===ed.dataset.edit);
+        if(s){ try{ openCalib(s, ()=>{ loadSources([s],true); render(); }); }
+               catch(err){ toast('打不开校准界面：'+err.message); } }
+        return;
+      }
+      const mo=e.target.closest&&e.target.closest('[data-more]');
+      if(mo){
+        const s=state.cfg.sources.find(x=>x.id===mo.dataset.more);
+        /* 复用已有的 openSourceSite：桌面版交给系统浏览器、网页版新标签、安卓走原生桥 */
+        if(s) openSourceSite(s); else toast('找不到该源');
+        return;
+      }
       const h=e.target.closest&&e.target.closest('.bhead,.bfoot');
       if(h&&h.dataset.sid){ state.view=h.dataset.sid; renderSidebar(); render(); return; }
       const n=e.target.closest&&e.target.closest('.bitem');
@@ -2280,6 +2495,11 @@ $('#mTabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{ state.tab=b.da
 $('#btnSet').onclick=()=>openModal('general');
 $('#btnSet2').onclick=()=>openModal('general');
 $('#btnAdd').onclick=()=>{ state.addOpen=true; openModal('sources'); };
+/* V8.0.5：侧边栏头部「校」→ 校对当前正在看的源，没选源就提示先选一个 */
+(()=>{ const b=$('#btnCalibSide');
+  if(b) b.onclick=e=>{ e.stopPropagation();
+    const cur=state.cfg&&(state.cfg.sources||[]).find(s=>s.id===state.view);
+    calibSource(cur); }; })();
 $('#btnFb').onclick=()=>openModal('feedback');
 $('#btnTr').onclick=e=>{ e.stopPropagation(); toggleTrPop(); };
 
@@ -2287,7 +2507,15 @@ function setS(k,v){ state.cfg.settings[k]=v; saveCfg(); applyLook(); renderModal
   // 全局每源条数：同步到所有源（单个源之后仍可在「新闻源」里单独改）并立即重新抓取生效
   if(k==='perSource'){ state.cfg.sources.forEach(s=>{ s.count=v; }); saveCfg(); refreshAll(true); } }
 
-const APP_VER='V8.0.2';
+const APP_VER='V8.0.7';
+/* V8.0.4：版本号单一来源——页面里所有 .ver 占位和标题栏都从 APP_VER 填充，
+   以后只改这一处，标题/侧栏/关于页永远一致，不会再出现「还显示上一代版本」。 */
+function fillVer(){
+  const v=APP_VER.replace(/^v/i,'');
+  try{ document.title='热榜助手 V'+v; }catch(e){}
+  document.querySelectorAll('.ver').forEach(n=>{ n.textContent='V'+v; });
+}
+try{ fillVer(); }catch(e){}
 /* V7.7：单窗口守卫——重复双击图标再开窗口时，旧窗口自动聚焦、新窗口自动关闭 */
 (function(){
   try{
@@ -2483,6 +2711,79 @@ function bindAdBlock(B,S){
 })();
 
 /* V8.0.2：给一个源挑多个分类（点分类按钮弹浮层，勾选即时保存，最多 4 个） */
+/* ============ V8.1：新闻源校准向导 ============
+   用户添加的源提取到导航/目录时，在这里自助选择「哪个目录下的题目」：
+   程序枚举页面上最像新闻列表的候选（每候选 5 条样例 + 10 条预览），
+   用户点选后锁定 sel 选择器保存，之后抓取直取锁定选择器（零额外开销）。 */
+function openCalib(src, onDone){
+  document.querySelectorAll('.calibov').forEach(n=>n.remove());
+  let chosen=null;
+  const ov=document.createElement('div'); ov.className='calibov';
+  ov.innerHTML=`<div class="calibpn">
+    <div class="cHead"><b>校准新闻列表</b><span style="font-size:11.5px;color:var(--sub)">选出标题正确的列表</span><button class="mini cClose">✕</button></div>
+    <div class="cUrlRow"><input class="cUrl" value="${esc(src.url||'')}" spellcheck="false" placeholder="榜单地址 https://…"><button class="mini primary cGo">分析页面</button></div>
+    <div class="cTip">点候选卡选「哪个目录下的题目」；提取出的是分类名/导航就换一个候选，或改成官网子页面地址再分析。要校准「源内检索」，就填含 <b>{q}</b> 的搜索地址（如 https://站点/search?q={q}）再分析。</div>
+    <div class="cList"><div class="cLoading" style="color:var(--sub);font-size:12.5px;padding:10px 2px">正在分析页面…</div></div>
+    <div class="cFoot"><button class="mini primary cSave" disabled>保存校准</button><span class="cMsg">${src.sel&&src.sel.link||src.sel&&src.sel.block?'已校准过，可重新选择':'未校准，使用自动识别'}</span></div>
+  </div>`;
+  document.body.appendChild(ov);
+  const close=()=>ov.remove();
+  ov.addEventListener('click',e=>{ if(e.target===ov) close(); });
+  ov.querySelector('.cClose').onclick=close;
+  const list=ov.querySelector('.cList'), msg=ov.querySelector('.cMsg'), saveB=ov.querySelector('.cSave');
+  const render=(cands)=>{
+    list.innerHTML='';
+    if(!cands.length){ list.innerHTML='<div class="cand"><div class="cErr">这个页面没有识别出候选列表。试试：①改成官网子页面/栏目页地址 ②该站可能是 JS 渲染，需专用解析器</div></div>'; return; }
+    cands.forEach((c,i)=>{
+      const d=document.createElement('div'); d.className='cand'; d.dataset.i=i;
+      const badge=c.menu?'<span class="bdg warn">⚠️ 疑似导航/栏目</span>':'<span class="bdg ok">✓ 新闻列表</span>';
+      d.innerHTML=`<div class="cT">${badge}<span>约 ${c.count} 条</span><span>${c.kind==='cls'?'同标记列表':'同容器列表'}</span><span>推荐度 ${c.score}</span></div>
+        <div class="cS">${(c.sample||[]).map(t=>`<div title="${esc(t)}">${esc(t)}</div>`).join('')}</div>
+        <div class="cPrev" style="display:none"></div>`;
+      d.onclick=()=>{
+        list.querySelectorAll('.cand').forEach(x=>x.classList.remove('on'));
+        d.classList.add('on'); chosen=c; saveB.disabled=false;
+        msg.textContent='已选择：约 '+c.count+' 条，保存后立即生效';
+      };
+      d.ondblclick=()=>{ d.onclick&&d.onclick(); saveB.click(); };
+      list.appendChild(d);
+    });
+  };
+  const load=(u)=>{
+    if(!/^https?:\/\//i.test(u||'')){ msg.textContent='请填写有效地址'; return; }
+    chosen=null; saveB.disabled=true;
+    list.innerHTML='<div style="color:var(--sub);font-size:12.5px;padding:10px 2px">正在分析页面…</div>';
+    api('/api/candidates?url='+encodeURIComponent(u)).then(r=>{
+      if(!r.ok){ list.innerHTML='<div class="cand"><div class="cErr">分析失败：'+esc(r.error||'未知错误')+'。可尝试改用子页面地址或 RSS 地址。</div></div>'; return; }
+      render(r.candidates||[]);
+    }).catch(err=>{ list.innerHTML='<div class="cand"><div class="cErr">网络错误：'+esc((err&&err.message)||'页面抓取失败，检查地址或网络后重试')+'</div></div>'; });
+  };
+  ov.querySelector('.cGo').onclick=()=>load(ov.querySelector('.cUrl').value.trim());
+  ov.querySelector('.cUrl').addEventListener('keydown',e=>{ if(e.key==='Enter') load(e.target.value.trim()); });
+  saveB.onclick=()=>{
+    if(!chosen){ toast('先点选一个候选列表'); return; }
+    const curUrl=ov.querySelector('.cUrl').value.trim();
+    if(curUrl.indexOf('{q}')>=0){
+      /* 检索地址校准：保存到 search + search_sel，不动主地址 */
+      src.search=curUrl; src.search_sel=chosen.sel;
+      saveCfg(); close();
+      if(typeof onDone==='function') onDone(src);
+      toast('已校准「检索结果页」：之后在源内搜索直接显示结果');
+      return;
+    }
+    src.sel=chosen.sel;
+    src.url=curUrl;                 /* V8.0.4：向导里改过地址就以新地址为准（换子页面的核心用法） */
+    src.calib={url:curUrl, at:Date.now(),
+               sample:(chosen.preview||[]).slice(0,3).map(x=>x.title)};
+    if(!src.parser||src.parser==='auto') src.parser='html';
+    saveCfg();
+    close();
+    if(typeof onDone==='function') onDone(src);
+    else { try{ loadSources([src],true); }catch(_e){} toast('已校准「'+(src.name||'源')+'」：之后按锁定的列表抓取'); }
+  };
+  load(src.url||'');
+}
+
 function openCatPick(anchor, s){
   document.querySelectorAll('.catpick-pop').forEach(n=>n.remove());
   const pop=el('div','catpick-pop');
@@ -2511,7 +2812,8 @@ function openCatPick(anchor, s){
 }
 
 
-function renderModal(){
+function renderModal(){ _renderModal(); fillVer(); }
+function _renderModal(){
   $('#mTabs').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.t===state.tab));
   const B=$('#mBody'); B.innerHTML=''; const S=state.cfg.settings;
 
@@ -2545,11 +2847,25 @@ function renderModal(){
         <div class="ctl">
           <button class="pill ${S.closeAction!=='exit'?'on':''}" data-k="closeAction" data-v="tray">最小化到托盘</button>
           <button class="pill ${S.closeAction==='exit'?'on':''}" data-k="closeAction" data-v="exit">直接退出</button></div></div>
-      <div class="field"><div class="lb">窗口形式<div class="hint">默认「独立窗口」：像普通软件一样开一个没有地址栏的窗口，不会被浏览器标签页带走</div></div>
+      <div class="field"><div class="lb">窗口形式（主界面）<div class="hint">默认「独立窗口」：像普通软件一样开一个没有地址栏的小窗口，不会被浏览器标签页带走。选「默认浏览器」才会把你平时用的浏览器里打开主界面（插件书签全在，但是一个普通标签页）。</div></div>
         <div class="ctl">
-          <button class="pill ${S.openMode!=='browser'?'on':''}" data-k="openMode" data-v="app">独立窗口</button>
+          <button class="pill ${S.openMode!=='browser'?'on':''}" data-k="openMode" data-v="app">独立窗口（推荐）</button>
           <button class="pill ${S.openMode==='browser'?'on':''}" data-k="openMode" data-v="browser">默认浏览器</button>
-          <span style="font-size:11px;color:var(--sub);white-space:nowrap">↑ 默认浏览器：方便用浏览器扩展插件翻译</span></div></div>
+          <span style="font-size:11px;color:var(--sub);white-space:nowrap">↑ 选「默认浏览器」时用哪个浏览器，由下面一项决定</span></div></div>
+      ${srcLocalHost()?`<div class="field" id="brField"><div class="lb">用哪个浏览器打开外链<div class="hint">点新闻源「更多」等外链跳转用的浏览器：默认「日常浏览器」——直接在你平时用的 Edge / Chrome 里打开，插件、书签、登录状态全都在。「独立窗口」是隔离小窗口，干净但没插件。「系统默认」跟随 Windows 设置。主界面窗口由上面的「窗口形式」决定。</div></div>
+        <div class="ctl">
+          <button class="pill ${S.extBrowser!=='sys'&&S.extBrowser!=='edge'&&S.extBrowser!=='chrome'&&S.extBrowser!=='custom'&&S.extBrowser!=='app'?'on':''}" data-k="extBrowser" data-v="daily">日常浏览器（推荐）</button>
+          <button class="pill ${S.extBrowser==='edge'?'on':''}" data-k="extBrowser" data-v="edge">Edge</button>
+          <button class="pill ${S.extBrowser==='chrome'?'on':''}" data-k="extBrowser" data-v="chrome">Chrome</button>
+          <button class="pill ${S.extBrowser==='sys'?'on':''}" data-k="extBrowser" data-v="sys">系统默认</button>
+          <button class="pill ${S.extBrowser==='custom'?'on':''}" data-k="extBrowser" data-v="custom">自定义</button>
+          <button class="pill ${S.extBrowser==='app'?'on':''}" data-k="extBrowser" data-v="app">独立窗口</button></div>
+        <div id="brCustom" style="display:${S.extBrowser==='custom'?'flex':'none'};margin-top:8px;align-items:center;gap:8px;flex-wrap:wrap">
+          <input id="brPath" placeholder="浏览器 exe 完整路径，如 C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
+            style="flex:1;min-width:200px;font-size:12px;padding:6px 8px;border-radius:8px;border:1px solid var(--line,#ddd);background:var(--card,#fff);color:var(--text,#222)" value="${esc(String(S.extBrowserPath||''))}">
+          <button class="pill" id="brBrowse">浏览…</button>
+          <button class="pill" id="brCheck">检测</button>
+          <span id="brMsg" style="font-size:12px;color:var(--sub)"></span></div></div>`:''}
       <div class="field"><div class="lb">朗读语速</div>
         <div class="ctl">${[0.8,1,1.25,1.5,1.8].map(n=>`<button class="pill ${Math.abs((S.ttsRate||1.25)-n)<0.01?'on':''}" data-k="ttsRate" data-v="${n}">${n===1.25?'1.25':n.toFixed(1)}x</button>`).join('')}</div></div>
       <div class="field"><div class="lb">启动自动检测<div class="hint">每次打开软件先强制刷新全部源，没抓到数据的自动隐藏</div></div>
@@ -2560,10 +2876,8 @@ function renderModal(){
         <div class="ctl">
           <button class="pill ${S.showOnlyOk?'on':''}" data-k="showOnlyOk" data-v="1">开启</button>
           <button class="pill ${!S.showOnlyOk?'on':''}" data-k="showOnlyOk" data-v="0">关闭</button></div></div>
-      <div class="field"><div class="lb">站点 Cookie（高级）<div class="hint">JSON 格式：{"bilibili.com": "SESSDATA=xxx; ..."}。给需要登录/风控的站点带上你的 Cookie，仅保存在本机，按域名后缀匹配注入抓取</div></div>
-        <textarea id="ckJson" spellcheck="false" style="width:100%;height:92px;box-sizing:border-box;font:12px/1.5 Consolas,monospace;padding:8px;border:1px solid var(--line,#ddd);border-radius:8px;background:var(--card,#fff);color:var(--text,#222);resize:vertical;">${(S.cookies&&Object.keys(S.cookies).length)?JSON.stringify(S.cookies,null,1).replace(/</g,'\u003c'):''}</textarea>
-        <div style="margin-top:6px;display:flex;align-items:center;gap:10px;">
-          <button class="pill" id="ckSave">保存 Cookie</button><span id="ckMsg" style="font-size:12px;opacity:.75;"></span></div></div>`;
+      <div class="field"><div class="lb">题目缓存（给 AI 分析用）<div class="hint">抓到的标题按天自动存成本地文件：每天一个文件夹，每行一条 JSON（时间/分类/来源/标题/链接/热度）。把下面路径复制给 WorkBuddy 等 AI 智能体，它就能直接读取做趋势分析、每日推送、标的关联。同一天同一条不重复记录。</div></div>
+        <div id="tlBox"><div style="font-size:12px;color:var(--sub)">读取缓存目录…</div></div></div>`;
     B.querySelectorAll('.pill').forEach(b=>b.onclick=()=>{
       let v=b.dataset.v;
       if(['perSource','autoRefresh','boardCount'].includes(b.dataset.k)) v=parseInt(v,10);
@@ -2593,6 +2907,93 @@ function renderModal(){
         if(msg){ msg.textContent='JSON 格式错误，例：{"bilibili.com": "k=v; k2=v2"}'; }
       }
     };
+    /* V8.0.6：浏览器选择——自定义路径 / 浏览 / 检测 */
+    const brPillClick=()=>{ const s=S.extBrowser;
+      const bc=B.querySelector('#brCustom'); if(bc) bc.style.display=(s==='custom')?'flex':'none'; };
+    B.querySelectorAll('#brField .pill').forEach(b=>{ const _o=b.onclick; b.addEventListener('click',()=>setTimeout(brPillClick,0)); });
+    const brBrowse=B.querySelector('#brBrowse');
+    if(brBrowse) brBrowse.onclick=()=>{
+      api('/api/pickfile',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(r=>{
+        if(r.ok&&r.path){ B.querySelector('#brPath').value=r.path; S.extBrowserPath=r.path; setS('extBrowserPath',r.path);
+          const m=B.querySelector('#brMsg'); if(m) m.textContent='已选择：'+r.path; }
+        else if(r.error){ toast(r.error); }
+      }).catch(()=>toast('打不开文件选择框'));
+    };
+    const brCheck=B.querySelector('#brCheck');
+    if(brCheck) brCheck.onclick=()=>{
+      const p=(B.querySelector('#brPath')||{}).value||'';
+      if(p && p!==S.extBrowserPath){ S.extBrowserPath=p; setS('extBrowserPath',p); }
+      const m=B.querySelector('#brMsg'); if(m) m.textContent='检测中…';
+      api('/api/browsercheck').then(r=>{
+        if(!r.ok){ if(m) m.textContent='检测失败'; return; }
+        const names=Object.keys(r.browsers||{});
+        let txt=names.length?('本机找到：'+names.join('、')):'本机没找到 Edge/Chrome';
+        if(r.custom) txt+='；自定义路径有效';
+        else if(S.extBrowser==='custom') txt+=p?'；该路径无效（文件不存在）':'；还没填自定义路径';
+        if(m) m.textContent=txt;
+      }).catch(()=>{ if(m) m.textContent='检测失败（本地服务无响应）'; });
+    };
+    /* V8.0.5：题目缓存目录（复制路径给 AI / 打开目录 / 保留天数）
+       V8.0.6：路径改成可编辑输入框，加「浏览…」选文件夹和「保存」；
+               服务没响应时不再显示占位符，直接显示默认目录（dataDir\titles），可手改保存 */
+    const tlBox=B.querySelector('#tlBox');
+    if(tlBox){
+      const DEF=(state.cfg&&state.cfg.dataDir)?(state.cfg.dataDir.replace(/[\\/]+$/,'')+'\\titles'):'';
+      let TD={dir:'',keep:0};
+      const paintTl=(errMsg)=>{
+        const desk=srcLocalHost();
+        tlBox.innerHTML=`
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <input id="tlDir" class="url" spellcheck="false" title="可直接编辑，改完点「保存」；软件会在里面按天建日期文件夹"
+              value="${esc(TD.dir||DEF||'')}" style="flex:1 1 100%;min-width:0;font-size:12px;margin-bottom:2px">
+            ${desk?'<button class="pill" id="tlBrowse">浏览…</button>':''}
+            <button class="pill" id="tlSave">保存</button>
+            <button class="pill" id="tlCopy">复制路径</button>
+            ${desk?'<button class="pill" id="tlOpen">打开目录</button>':''}
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px">
+            <span style="font-size:12px;color:var(--sub)">历史保留</span>
+            ${[[0,'永久'],[30,'30 天'],[90,'90 天'],[365,'365 天']].map(([v,t])=>`<button class="pill ${(+TD.keep||0)===v?'on':''}" data-tk="${v}">${t}</button>`).join('')}
+          </div>
+          <div style="font-size:11.5px;color:var(--sub);margin-top:6px;line-height:1.7">软件会自动在里面建 <b>日期文件夹/分类.jsonl</b>（如 <b>2026-11-20/财经.jsonl</b>，每行一条 JSON），根目录自带 <b>README-AI.txt</b> 说明字段。路径可直接编辑，或点「浏览…」选文件夹后保存。</div>
+          ${errMsg?`<div style="font-size:11.5px;color:#f04438;margin-top:4px;line-height:1.6">${esc(errMsg)}</div>`:''}`;
+        const inp=tlBox.querySelector('#tlDir');
+        const saveDir=async(dirStr)=>{
+          const r=await api('/api/titles/dir',{method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({dir:(dirStr||'').trim()})});
+          if(r&&r.ok){ TD.dir=r.dir; TD.keep=(r.keep!=null?r.keep:TD.keep); paintTl(); toast('缓存目录已保存'); }
+          else paintTl('保存失败：'+((r&&r.error)||'目录不可写或路径不合法'));
+        };
+        const sv=tlBox.querySelector('#tlSave'); if(sv) sv.onclick=()=>saveDir(inp.value);
+        if(inp) inp.onkeydown=e=>{ if(e.key==='Enter') saveDir(inp.value); };
+        const br=tlBox.querySelector('#tlBrowse');
+        if(br) br.onclick=async()=>{
+          try{
+            const r=await api('/api/titles/pickdir',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+            if(r&&r.ok&&r.path){ inp.value=r.path; await saveDir(r.path); }
+            else if(r&&r.error) paintTl('选择文件夹失败：'+r.error+'（可直接手填路径）');
+          }catch(e){ paintTl('选择文件夹失败（本地服务无响应），可直接手填路径'); }
+        };
+        const cp=tlBox.querySelector('#tlCopy');
+        if(cp) cp.onclick=()=>{ copyText(inp?inp.value:(TD.dir||'')); toast('路径已复制'); };
+        const op=tlBox.querySelector('#tlOpen');
+        if(op) op.onclick=()=>{
+          api('/api/titles/open',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})
+            .then(r=>{ if(!r||!r.ok) toast('打不开目录：'+((r&&r.error)||'可能被权限限制，可用「复制路径」粘贴到资源管理器')); })
+            .catch(()=>toast('打不开目录（本地服务无响应），可用「复制路径」'));
+        };
+        tlBox.querySelectorAll('[data-tk]').forEach(b=>b.onclick=async()=>{
+          const r=await api('/api/titles/dir',{method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({keep:+b.dataset.tk})});
+          if(r&&r.ok){ TD.keep=r.keep; paintTl(); toast('保留策略已更新'); }
+          else paintTl('保存失败：'+((r&&r.error)||'未知错误'));
+        });
+      };
+      api('/api/titles/info').then(r=>{
+        TD={dir:(r&&r.dir)||DEF, keep:(r&&r.keep)||0};
+        paintTl(r&&r.ok===false?('读取目录信息失败：'+(r.error||'未知原因')+'（已显示默认目录）'):'');
+      }).catch(()=>paintTl('本机服务未响应：以下为默认目录，可手改后点「保存」重试'));
+    }
     // 本地：保存时动态维护 region_news 源
     const rbtn=B.querySelector('#regionSave');
     if(rbtn) rbtn.onclick=()=>{
@@ -3070,9 +3471,20 @@ function renderModal(){
         <button class="mini danger" id="delSel">🗑 批量删除</button></div>
       <input type="file" id="impFile" accept=".json,application/json" class="hide">`;
     B.appendChild(bar);
+    /* V8.0.4：源太多不好找——按名称/网址/分类/备注/ID 即时过滤（不重建 DOM，输入不卡不掉焦点） */
+    const sbox=el('div'); sbox.style.cssText='display:flex;align-items:center;gap:8px;margin:8px 0 6px;flex-wrap:wrap';
+    sbox.innerHTML=`<input id="srcSearch" class="url" style="flex:1 1 220px;max-width:380px" spellcheck="false"
+        placeholder="🔍 搜索新闻源：名称 / 网址 / 分类 / 备注" value="${esc(state.srcFilter||'')}">
+      <span id="srcSearchN" style="font-size:12px;color:var(--sub)"></span>`;
+    B.appendChild(sbox);
     const getCk=()=>[...B.querySelectorAll('input.ck:checked')].map(c=>c.dataset.id);
     bar.querySelector('#ckAll').onchange=e=>{
-      B.querySelectorAll('input.ck').forEach(c=>c.checked=e.target.checked); syncDel();
+      B.querySelectorAll('input.ck').forEach(c=>{
+        const r=c.closest('.srcrow');
+        if(r&&r.style.display==='none') return;   /* 搜索过滤中：只勾可见的 */
+        c.checked=e.target.checked;
+      });
+      syncDel();
     };
     const syncDel=()=>{
       const n=getCk().length, btn=bar.querySelector('#delSel');
@@ -3160,6 +3572,8 @@ function renderModal(){
     state.cfg.sources.forEach((s,idx)=>{
       const row=el('div','srcrow');
       row.dataset.sid=s.id;
+      /* 搜索用的索引文本（名称/ID/地址/分类/备注） */
+      row.dataset.q=(s.name+' '+s.id+' '+s.url+' '+catLabel(s)+' '+(s.note||'')).toLowerCase();
       row.title='按住本行拖动可排序，也可拖到上方分类块换分组';
       row.innerHTML=`
         <input type="checkbox" class="ck" data-id="${esc(s.id)}" style="width:15px;height:15px;cursor:pointer;flex:none">
@@ -3170,6 +3584,7 @@ function renderModal(){
         <input class="num" type="number" min="1" max="50" value="${s.count||30}" title="显示条数（1~50）">
         <div class="ops">
           <button data-a="test" title="测试">测</button>
+          <button data-a="calib" title="校准：选择哪个目录下的题目">校</button>
           <button data-a="up" title="上移">↑</button>
           <button data-a="down" title="下移">↓</button>
           <button data-a="del" title="删除">✕</button>
@@ -3192,11 +3607,22 @@ function renderModal(){
       row.querySelector('input.num').onchange=e=>{
         let v=parseInt(e.target.value,10); if(!Number.isInteger(v))v=30; v=Math.max(1,Math.min(50,v));
         e.target.value=v; s.count=v; saveCfg(); render(); };
+      row.querySelector('[data-a="calib"]').onclick=()=>openCalib(s);
       row.querySelector('[data-a="test"]').onclick=()=>{
         toast('测试 '+s.name+'…');
-        api('/api/test?url='+encodeURIComponent(s.url)+'&parser='+encodeURIComponent(s.parser))
-          .then(r=>toast(s.name+'：成功 '+r.count+' 条'+(r.sample[0]?'，如「'+r.sample[0].title.slice(0,16)+'」':'')))
-          .catch(()=>toast(s.name+'：解析失败'));
+        const selQ=(s.sel&&(s.sel.link||s.sel.block))?'&sel='+encodeURIComponent(JSON.stringify(s.sel)):'';
+        api('/api/test?url='+encodeURIComponent(s.url)+'&parser='+encodeURIComponent(s.parser)+selQ)
+          .then(r=>{
+            /* V8.1 改版检测：与上次校准保存的样例对比，对不上就提醒重新校准 */
+            let drift=false;
+            if(s.calib&&s.calib.sample&&s.calib.sample.length&&(r.sample||[]).length){
+              const now=(r.sample||[]).map(x=>(x.title||'').slice(0,20));
+              const hit=(a,b)=>a&&(a.slice(0,20)===b||b.includes(a.slice(0,12))||a.includes(b.slice(0,12)));
+              drift=!s.calib.sample.some(t=>now.some(n=>hit(n,t)));
+            }
+            toast(s.name+'：成功 '+r.count+' 条'+(r.sample[0]?'，如「'+r.sample[0].title.slice(0,16)+'」':'')+(drift?' ⚠️ 与上次校准不同，网站可能改版，建议点「校」重新校准':''));
+          })
+          .catch(err=>toast(s.name+'：解析失败（'+String((err&&err.message)||'网络异常').slice(0,60)+'）'));
       };
       /* V7.9.1：↑↓ 一键排序（与侧栏同一套逻辑，单击立刻生效并保存） */
       row.querySelector('[data-a="up"]').onclick=()=>moveSourceStep(s.id,-1,false);
@@ -3209,6 +3635,25 @@ function renderModal(){
       };
       B.appendChild(row);
     });
+    /* V8.0.4：搜索过滤（隐藏不匹配的行，实时显示匹配数；清空即恢复全部） */
+    const applySrcFilter=(kw)=>{
+      const q=(kw||'').trim().toLowerCase();
+      state.srcFilter=q;
+      let n=0;
+      B.querySelectorAll('.srcrow[data-sid]').forEach(r=>{
+        const hit=!q || (r.dataset.q||'').indexOf(q)>=0;
+        r.style.display=hit?'':'none';
+        if(hit) n++;
+      });
+      const lab=B.querySelector('#srcSearchN');
+      if(lab) lab.textContent=q?('匹配 '+n+' 个源'+(n?'':'，换个关键词试试')):'共 '+state.cfg.sources.length+' 个源';
+    };
+    const si=B.querySelector('#srcSearch');
+    if(si){
+      si.oninput=()=>applySrcFilter(si.value);
+      si.onkeydown=e=>{ if(e.key==='Escape'){ si.value=''; applySrcFilter(''); } };
+      applySrcFilter(si.value);
+    }
     bindModalDrag(B);   // V7.9：设置页源行按住拖动排序 / 拖到分类块换分组
     /* V8.0.2：「＋ 新增新闻源」移到顶部工具条（导出源/导入源前面），底部不再重复放按钮 */
     if(state.addOpen){
@@ -3216,33 +3661,65 @@ function renderModal(){
       box.innerHTML=`<div class="r"><input id="nName" placeholder="名称，如：我的博客热榜" style="flex:1">
           <select id="nParser" style="width:110px">
             <option value="auto">自动识别</option><option value="json">JSON</option><option value="html">HTML</option>
+            <option value="crossref">期刊·ISSN</option>
           </select></div>
-        <div class="r"><input id="nUrl" placeholder="榜单地址 https://…" style="flex:1"></div>
+        <div class="r"><input id="nUrl" placeholder="榜单地址 https://…（选期刊时填 ISSN 号，如 1664-1078）" style="flex:1"></div>
         <div class="r"><input id="nSearch" placeholder="搜索地址（可选，{q} 为关键词）" style="flex:1"></div>
         <div class="r" style="margin-bottom:0"><button class="mini" id="nTest">先测试</button>
+          <button class="mini" id="nCalib" title="校准：从页面里选出正确的新闻列表">校准</button>
           <button class="mini" id="nAdd" style="background:var(--blue);color:#fff;border-color:var(--blue);font-weight:600">添加</button>
           <button class="mini" id="nCancel">取消</button><span id="nOut" style="font-size:12px;color:var(--sub);margin-left:6px"></span></div>`;
       B.appendChild(box);
+      let calibSel=null, calibUrl='';
       box.querySelector('#nCancel').onclick=()=>{ state.addOpen=false; renderModal(); };
       box.querySelector('#nTest').onclick=()=>{
-        const u=box.querySelector('#nUrl').value.trim(), p=box.querySelector('#nParser').value;
+        const p=box.querySelector('#nParser').value;
+        let u=box.querySelector('#nUrl').value.trim();
         const out=box.querySelector('#nOut');
+        /* V8.1：期刊·ISSN —— 直接填 ISSN 号，自动拼 CrossRef 最新论文接口 */
+        if(p==='crossref'){
+          const issn=u.replace(/^https?:\/\/[^/]*journals\//,'').split('/')[0].trim();
+          if(!/^\d{4}-?\d{3}[\dxX]$/.test(issn)){ out.innerHTML='<span style="color:#f04438">ISSN 格式不对（形如 1664-1078）</span>'; return; }
+          u='https://api.crossref.org/journals/'+encodeURIComponent(issn)+
+            '/works?rows=20&sort=published&order=desc&select=title,DOI,published,published-online,issued&mailto=rebang-helper@outlook.com';
+          box.querySelector('#nUrl').value=issn;
+        }
         if(!u){ out.textContent='先填地址'; return; }
         out.textContent='测试中…';
         api('/api/test?url='+encodeURIComponent(u)+'&parser='+encodeURIComponent(p))
-          .then(r=>out.innerHTML='<b style="color:var(--blue)">可以解析 '+r.count+' 条</b>')
-          .catch(()=>out.innerHTML='<span style="color:#f04438">解析失败，换个地址或改类型试试</span>');
+          .then(r=>{ if(r.ok===false) throw new Error(r.error||'该地址解析不出条目');
+            out.innerHTML='<b style="color:var(--blue)">可以解析 '+r.count+' 条</b>'; })
+          .catch(err=>out.innerHTML='<span style="color:#f04438">解析失败：'+esc((err&&err.message)||'换个地址或改类型试试')+'</span>');
+      };
+      box.querySelector('#nCalib').onclick=()=>{
+        const u=box.querySelector('#nUrl').value.trim();
+        if(!u){ toast('先填地址再校准'); return; }
+        openCalib({url:u, name:box.querySelector('#nName').value.trim()||'新源', parser:'auto', sel:{}}, (src)=>{
+          calibSel=src.sel; calibUrl=src.calib?src.calib.url:'';
+          if(calibUrl) box.querySelector('#nUrl').value=calibUrl;
+          box.querySelector('#nOut').innerHTML='<b style="color:var(--blue)">已校准，点「添加」生效</b>';
+        });
       };
       box.querySelector('#nAdd').onclick=()=>{
         const name=box.querySelector('#nName').value.trim()||'新热榜';
-        const u=box.querySelector('#nUrl').value.trim();
+        let u=box.querySelector('#nUrl').value.trim();
+        const p=box.querySelector('#nParser').value;
         if(!u){ toast('请填写地址'); return; }
+        if(p==='crossref'){
+          const issn=u.replace(/^https?:\/\/[^/]*journals\//,'').split('/')[0].trim();
+          if(!/^\d{4}-?\d{3}[\dxX]$/.test(issn)){ toast('ISSN 格式不对（形如 1664-1078）'); return; }
+          u='https://api.crossref.org/journals/'+encodeURIComponent(issn)+
+            '/works?rows=20&sort=published&order=desc&select=title,DOI,published,published-online,issued&mailto=rebang-helper@outlook.com';
+        }
         const id='u'+Date.now().toString(36);
-        state.cfg.sources.push({id,name,url:u,parser:box.querySelector('#nParser').value,
-          sel:{},count:30,enabled:true,note:'自定义源',search:box.querySelector('#nSearch').value.trim()});
+        const ns={id,name,url:u,parser:(calibSel&&p!=='crossref'?'html':p),
+          sel:calibSel?calibSel:{},count:30,enabled:true,note:calibSel?'自定义源·已校准':'自定义源',
+          search:box.querySelector('#nSearch').value.trim()};
+        if(calibSel) ns.calib={url:calibUrl||u,at:Date.now(),sample:[]};
+        state.cfg.sources.push(ns);
         state.addOpen=false; saveCfg();
         loadSources([state.cfg.sources.find(x=>x.id===id)],true);
-        renderModal(); renderSidebar(); render(); toast('已添加「'+name+'」');
+        renderModal(); renderSidebar(); render(); toast('已添加「'+name+'」'+(calibSel?'（已校准）':''));
       };
     }
   }
@@ -3522,15 +3999,24 @@ function renderModal(){
         · 翻译结果会缓存，同一标题只翻一次；翻失败静默跳过，不弹窗。<br>
         · 想临时整页翻译：点顶栏 ${k('一键翻译本页')} 按钮。`)}
       ${sec('⚙️','怎么改设置',`右上角 ${k('⚙ 设置')} 打开设置面板，分六个页签：<br>
-        · ${k('常规')}：字号、每源条数、看板条数、本地地区、自动刷新、失败通知时长、英文翻译开关、聚合排序、托盘/退出、朗读语速、Cookie；<br>
+        · ${k('常规')}：字号、每源条数、看板条数、本地地区、自动刷新、失败通知时长、英文翻译开关、聚合排序、托盘/退出、朗读语速、窗口形式（主界面默认独立窗口）、用哪个浏览器打开外链（日常浏览器/Edge/Chrome/系统默认/自定义/独立窗口）、题目缓存目录；<br>
         · ${k('外观')}：主题、配色、字号、字体、背景图；<br>
-        · ${k('新闻源')}：开关、条数、改地址、分类管理、新增源；<br>
+        · ${k('新闻源')}：搜索框（输一个字就能筛源）、开关、条数、改地址、${k('校对提取规则')}、分类管理、新增源；<br>
         · ${k('账号')}：登录 / 注册 / 找回密码，云端同步（可选）；<br>
         · ${k('建议')}：提交使用建议；<br>
         · ${k('关于')}：版本、更新下载、打赏。`)}
-      ${sec('📰','新闻源排序与分类',`左侧「新闻源」列表每行右侧有 ${k('▲ ▼')} 按钮：点一下上移 / 下移，顺序立即生效并保存。<br>
+      ${sec('📰','新闻源排序与分类',`左侧「新闻源」列表每行右侧有 ${k('▲ ▼')} 按钮：点一下上移 / 下移，顺序立即生效并保存；<br>
+        ${k('点击某个源')}查看时，它会自动置顶（下次打开仍在最上面，最近常看的源不用翻）；<br>
         ${k('分类')}（综合 / 财经 / 娱乐 / 科技…）同样用 ${k('‹ ›')} 按钮左右移动；<br>
+        已隐藏的分类、以及可用源为 0 的分类不再占位显示；分类条末尾会出现 ${k('🚫 已隐藏 N')}，点它能看到所有被隐藏的分类，并直接「恢复显示」或「删除」；<br>
         设置 → 新闻源 里也能调整，并支持把源拖到其它分类、隐藏分类、新增自定义源。`)}
+      ${sec('🧭','新闻源校对（「校」按钮）',`新闻源把导航栏、分类目录、作者名当成标题时，用校对功能一次修好：<br>
+        · ${k('入口')}：左侧「新闻源」标题栏右侧的 ${k('校')} 按钮（校对当前正在看的源）；每个源行悬停也有 ${k('校')}；单源页面右上角 ${k('✎ 修改')}；设置 → 新闻源 每行也有 ${k('校')}；<br>
+        · ${k('流程')}：打开后软件抓 10 条样本，列出页面上所有候选区块（标题组），你点一个 → 下方预览对错 → 点「保存并锁定」，之后这个源永远按你的选择提取，不再自动猜；<br>
+        · ${k('对不上就换地址')}：向导里可以把源地址换成一个更干净的栏目页（例如某网站的子栏目），换完重新识别；<br>
+        · ${k('速度')}：锁定后走固定规则，零额外开销，不影响刷新速度；<br>
+        · ${k('搜索源')}：设置 → 新闻源 顶部搜索框，输入一个字就能筛出相关源，不用翻 200 条；<br>
+        · ${k('期刊类')}（央行、财政部、财新、央视、中房网、现代城市研究、规划师等）使用专用解析规则，不走自动兜底，识别错误时同样可用「校」重新选择。`)}
       ${sec('🔍','搜索、朗读与收藏',`顶栏搜索框输入关键词回车筛选；右侧 ${k('🔊')} 按钮朗读本页标题（快捷键 R）；<br>
         收藏在左侧「收藏」分类里，浏览记录保存在本机，不上传。`)}
       ${sec('👤','登录与云同步（可选）',`${k('不登录')}完全不影响使用。登录只为换电脑/重装后一键恢复：<br>
@@ -3538,6 +4024,13 @@ function renderModal(){
         云端只存设置、收藏、标记和自定义源，不存浏览记录。`)}
       ${sec('🛰','抓取失败通知与证书',`某个源没抓到时，顶部会出现粉色通知条：显示失败源、原因，可${k('复制')}、${k('查看详情')}、${k('重试')}、${k('✕')}，默认 10 秒自动关闭。<br>
         部分站点（政府/统计/期刊）证书链不全，软件已内置容错；想修浏览器端问题，可在 设置 → 证书 里检测并安装（那里有「一键全部检测并安装」）。`)}
+      ${sec('🤖','题目缓存：给 AI 做数据支撑',`抓到的标题会自动存成本地文件，供 WorkBuddy 等 AI 智能体直接读取分析：<br>
+        · ${k('位置')}：设置 → 常规 → 题目缓存。默认在软件数据目录的 ${k('titles')} 文件夹；路径可直接编辑，或点「浏览…」选文件夹后「保存」，软件会自动在里面建日期文件夹；<br>
+        · ${k('结构')}：每天一个日期文件夹（如 ${k('2026-11-20/')}），每个分类一个 .jsonl，另有一份当天合并的 ${k('_all.jsonl')}；每行一条 JSON：时间 / 分类 / 来源 / 标题 / 链接 / 热度；<br>
+        · ${k('给 AI 用')}：点「复制路径」，在 WorkBuddy 里说「分析这个目录里今天的财经标题」，AI 就能直接读；根目录的 ${k('README-AI.txt')} 写清了字段含义；<br>
+        · ${k('能做什么')}：每日热点自动推送（AI 定时任务）、经济形势与个股利多利空关联、期刊选题与科研热点趋势追踪；<br>
+        · ${k('保留')}：默认永久保留，可选 30 / 90 / 365 天后自动清理；同一天同一条只记一次，重复出现本身就是热点信号；<br>
+        · ${k('注意')}：标题是二手信号，AI 的分析结论适合当研究线索，不构成投资建议。`)}
       ${sec('🔄','更新与反馈',`设置 → 关于 里有蓝奏云 / 夸克 / 百度网盘下载入口（蓝奏云自动复制提取码）。<br>
         用着不顺手、想加站点，欢迎在 设置 → 建议 里告诉我们，无需登录即可提交。`)}`;
     return;
@@ -3548,7 +4041,7 @@ function renderModal(){
     B.innerHTML=`
       <div class="about">
         <div style="display:flex;align-items:center;gap:14px;margin-bottom:12px">
-          <div><div style="font-size:18px;font-weight:700;color:var(--text)">热榜助手 V8.0.2</div>
+          <div><div style="font-size:18px;font-weight:700;color:var(--text)">热榜助手 <span class="ver"></span></div>
             <div>作者：<b>七度</b></div></div>
         </div>
         聚合 ${state.cfg.sources.length} 个站点的热榜与资讯，全部数据来自各站点公开页面，仅在本机缓存。<br>
@@ -3631,10 +4124,35 @@ $('#q').onkeydown=e=>{
   if(e.key==='Enter'){
     const kw=e.target.value.trim();
     const s = state.view==='all'? enabled()[0] : state.cfg.sources.find(x=>x.id===state.view);
-    if(s&&s.search&&kw) window.open(s.search.replace('{q}',encodeURIComponent(kw)),'_blank');
+    if(s&&s.search&&kw){
+      /* V8.1：已校准检索结果页 → 软件内显示结果；否则维持跳浏览器 */
+      if(s.search_sel&&(s.search_sel.link||s.search_sel.block)){ openSrcSearch(s,kw); return; }
+      window.open(s.search.replace('{q}',encodeURIComponent(kw)),'_blank');
+    }
   }
   if(e.key==='Escape'){ e.target.value=''; state.filter=''; render(); }
 };
+/* V8.1 源内检索：按校准的 search_sel 解析检索结果，弹面板显示 */
+function openSrcSearch(s, kw){
+  document.querySelectorAll('.calibov').forEach(n=>n.remove());
+  const ov=document.createElement('div'); ov.className='calibov';
+  ov.innerHTML=`<div class="calibpn">
+    <div class="cHead"><b>检索「${esc(kw)}」</b><span style="font-size:11.5px;color:var(--sub)">${esc(s.name||'')}</span><button class="mini cClose">✕</button></div>
+    <div class="cList" id="srList"><div style="color:var(--sub);font-size:12.5px;padding:10px 2px">检索中…</div></div>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.addEventListener('click',e=>{ if(e.target===ov) ov.remove(); });
+  ov.querySelector('.cClose').onclick=()=>ov.remove();
+  api('/api/searchsrc?id='+encodeURIComponent(s.id)+'&q='+encodeURIComponent(kw)).then(r=>{
+    const L=ov.querySelector('#srList');
+    if(!r.ok){ L.innerHTML='<div class="cand"><div class="cErr">检索失败：'+esc(r.error||'')+'</div></div>'; return; }
+    const its=r.items||[];
+    if(!its.length){ L.innerHTML='<div class="cand"><div style="color:var(--sub);padding:6px 2px">没有检索到内容。可在设置里点「校」，用含 {q} 的搜索地址重新校准。</div></div>'; return; }
+    L.innerHTML=its.map(i=>`<div class="cand" data-u="${esc(i.url||'')}">
+      <div class="cS"><div style="white-space:normal">${esc(i.title||'')}</div></div></div>`).join('');
+    L.querySelectorAll('.cand').forEach(d=>d.onclick=()=>{ if(d.dataset.u) openExt(d.dataset.u); });
+  }).catch(()=>{ ov.querySelector('#srList').innerHTML='<div class="cand"><div class="cErr">网络错误</div></div>'; });
+}
 $('#segLayout').querySelectorAll('button').forEach(b=>b.onclick=()=>{
   state.layout=b.dataset.v; localStorage.setItem('hb_layout',state.layout); render();
 });

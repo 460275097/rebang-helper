@@ -29,8 +29,8 @@ from html.parser import HTMLParser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 APP_NAME = "热榜助手"
-APP_VER = "8.0.2"
-PRESET_VER = "8.0.2"   # 内置源清单版本：变化时启动会把内置源的新地址/说明同步进用户已有配置
+APP_VER = "8.0.7"
+PRESET_VER = "8.0.7"   # 内置源清单版本：变化时启动会把内置源的新地址/说明同步进用户已有配置
 AUTHOR = "七度"
 # 安装包下载页（云托管静态页，手机浏览器可直接下载 exe/apk）
 DL_PAGE_URL = "https://quickest-ocelot-d9fti0mr03ae447f-1518118034.tcloudbaseapp.com/dl/"
@@ -688,12 +688,12 @@ _NEW_CATS = [
         ('ind_sasac', '国资委', 'http://www.sasac.gov.cn/', 'html', '重大产业项目·产业链'),
     ]),
     ('前沿 AI', [
-        ('ai_aiera', '新智元', 'https://aiera.com.cn/', 'html', '行业热点·模型动态'),
+        ('ai_aiera', '新智元', 'https://aiera.com.cn/', 'html', '站点JS渲染·暂不可用', False),
         ('ai_infoq', 'InfoQ', 'https://www.infoq.cn/', 'html', 'AI 工程·技术落地'),
-        ('ai_arxiv', 'arXiv', 'https://arxiv.org/list/cs.AI/recent', 'html', '论文一手源头'),
+        ('ai_arxiv', 'arXiv', 'http://export.arxiv.org/rss/cs.AI', 'rss', '论文一手源头·官方RSS'),
         ('ai_openreview', 'OpenReview', 'https://openreview.net/', 'html', '论文评审与前沿讨论'),
         ('ai_openai', 'OpenAI Blog', 'https://openai.com/news/rss.xml', 'rss', '官方研究与产品更新·换官方 RSS'),
-        ('ai_google', 'Google AI Blog', 'https://blog.google/technology/ai/', 'html', '谷歌 AI 前沿'),
+        ('ai_google', 'Google AI Blog', 'https://blog.google/rss/', 'rss', '谷歌 AI 前沿·官方RSS'),
         ('ai_venturebeat', 'VentureBeat', 'https://venturebeat.com/', 'html', 'AI 产业分析'),
         ('ai_verge', 'The Verge', 'https://www.theverge.com/', 'html', 'AI·产品动态'),
         ('ai_mit', 'MIT Tech Review', 'https://www.technologyreview.com/', 'html', '长期技术趋势'),
@@ -702,14 +702,14 @@ _NEW_CATS = [
         ('bio_nature', 'Nature', 'https://www.nature.com/', 'issn:0028-0836', '生命科学顶刊'),
         ('bio_science', 'Science', 'https://www.science.org/', 'issn:0036-8075', '综合科学前沿'),
         ('bio_cell', 'Cell', 'https://www.cell.com/', 'issn:0092-8674', '细胞与生命突破'),
-        ('bio_frontiers', 'Frontiers', 'https://www.frontiersin.org/', 'html', '开放获取生物医学'),
-        ('bio_bmc', 'BioMedCentral', 'https://www.biomedcentral.com/', 'html', '生命科学期刊'),
-        ('bio_geneng', 'GEN 生物技术', 'https://www.genengnews.com/', 'html', '生物技术产业'),
+        ('bio_frontiers', 'Frontiers in Cell Dev Bio', 'https://api.crossref.org/journals/2296-634X/works?rows=20&sort=published&order=desc', 'crossref', '开放获取生物医学·CellDevBio'),
+        ('bio_bmc', 'BMC Biology', 'https://api.crossref.org/journals/1741-7007/works?rows=20&sort=published&order=desc', 'crossref', '生命科学期刊·BMCBiology'),
+        ('bio_geneng', 'GEN 生物技术', 'https://www.genengnews.com/', 'html', '站点屏蔽抓取·暂不可用', False),
         ('bio_stat', 'STAT News', 'https://www.statnews.com/', 'html', '医疗前沿深度'),
     ]),
     ('心理学刊', [
         ('psy_acta', '心理学报', 'https://journal.psych.ac.cn/xlxb/CN/0439-755X/home.shtml', 'html', '国内权威心理顶刊'),
-        ('psy_frontiers', 'Frontiers in Psychology', 'https://www.frontiersin.org/journals/psychology', 'html', '国际开放心理刊'),
+        ('psy_frontiers', 'Frontiers in Psychology', 'https://api.crossref.org/journals/1664-1078/works?rows=20&sort=published&order=desc', 'crossref', '国际开放心理刊·CrossRef'),
         ('psy_review', 'Psychological Review', 'https://psycnet.apa.org/', 'issn:0033-295X', '经典综述刊'),
         ('psy_annual', 'Annual Review of Psychology', 'https://www.annualreviews.org/journal/psych', 'issn:0066-4308', '年度综述'),
         ('psy_jpsp', 'JPSP 人格与社会心理', 'https://www.apa.org/pubs/journals/psp', 'issn:0022-3514', '社会人格顶刊'),
@@ -717,12 +717,12 @@ _NEW_CATS = [
     ]),
     ('历史深度', [
         ('hist_qinghistory', '中华文史网', 'https://www.qinghistory.cn/', 'html', '权威历史综合站'),
-        ('hist_nlc', '国家图书馆', 'https://www.nlc.cn/', 'html', '古籍资源·文献档案'),
+        ('hist_nlc', '国家图书馆', 'https://www.nlc.cn/web/dsb_zx/gtxw/index.shtml', 'html', '国图新闻'),
         ('hist_modern', '近代史研究', 'http://jds.cass.cn/', 'html', '近代史权威刊'),
         ('hist_natgeo', 'National Geographic History', 'https://www.nationalgeographic.com/history', 'html', '世界史深度'),
         ('hist_historynet', 'HistoryNet', 'https://www.historynet.com/', 'html', '历史专题'),
         ('hist_fordham', 'Fordham 史料库', 'https://sourcebooks.fordham.edu/', 'html', '互联网历史史料库'),
-        ('hist_channel', 'History Channel', 'https://www.history.com/', 'html', '历史专题报道'),
+        ('hist_channel', 'Smithsonian 历史', 'https://www.smithsonianmag.com/rss/latest_articles/', 'rss', '历史专题报道·SmithsonianRSS'),
     ]),
     ('楼市基建', [
         ('real_mohurd', '住建部', 'https://www.mohurd.gov.cn/', 'html', '房地产·基建顶层政策'),
@@ -738,15 +738,15 @@ _NEW_CATS = [
         ('energy_cp', '中国电力报', 'https://www.cpnn.com.cn/', 'html', '电力专业资讯'),
         ('energy_cnenergynews', '中国能源网', 'https://www.cnenergynews.cn/', 'html', '能源产业动态'),
         ('energy_nea_cn', '中国核能行业协会', 'https://www.china-nea.cn/', 'html', '核能前沿'),
-        ('energy_global', 'Energy Global', 'https://www.energyglobal.com/', 'html', '全球能源产业'),
+        ('energy_global', 'Energy Global', 'https://www.energyglobal.com/news/', 'html', '全球能源产业·News'),
     ]),
     ('创业投融资', [
         ('vc_pedaily', '投资界', 'https://www.pedaily.cn/', 'html', '线下创投门户'),
         ('vc_chinaventure', '投中网', 'https://www.chinaventure.com.cn/', 'html', '创投深度与数据'),
         ('vc_cyzone', '创业邦', 'https://www.cyzone.cn/', 'html', '早期融资'),
         ('vc_news_cyzone', '新芽', 'https://news.cyzone.cn/', 'html', '投融资讯'),
-        ('vc_crunchbase', 'Crunchbase News', 'https://news.crunchbase.com/', 'html', '海外融资'),
-        ('vc_vnext', '科技成长路线图', 'https://www.v-next.cn/', 'html', '科创融资路演'),
+        ('vc_crunchbase', 'TechCrunch 融资', 'https://techcrunch.com/feed/', 'rss', '海外融资·TechCrunchRSS'),
+        ('vc_vnext', '科技成长路线图', 'https://www.v-next.cn/', 'html', '站点JS渲染·暂不可用', False),
     ]),
     ('学术顶刊', [
         ('acad_nature', 'Nature', 'https://www.nature.com/', 'issn:0028-0836', '综合科学顶刊'),
@@ -761,14 +761,14 @@ _NEW_CATS = [
         ('acad_psychrev', 'Psychological Review', 'https://psycnet.apa.org/', 'issn:0033-295X', '心理学顶刊'),
     ]),
     ('汽车产业', [
-        ('auto_caam', '中国汽车工业协会', 'http://www.caam.org.cn/', 'html', '产销数据与政策'),
-        ('auto_cnautonews', '中国汽车报网', 'http://www.cnautonews.com/', 'html', '汽车产业权威媒体'),
+        ('auto_caam', '中国汽车工业协会', 'http://www.caam.org.cn/hyzx', 'html', '行业动态'),
+        ('auto_cnautonews', '中国汽车报网', 'http://www.cnautonews.com/', 'html', '站点改版·暂不可用', False),
         ('auto_dongchedi', '懂车帝', 'https://www.dongchedi.com/', 'html', '新车·新能源资讯'),
         ('auto_autohome', '汽车之家', 'https://www.autohome.com.cn/', 'html', '汽车垂直门户'),
         ('auto_pcauto', '太平洋汽车网', 'https://www.pcauto.com.cn/', 'html', '汽车垂直资讯'),
-        ('auto_gasgoo', '盖世汽车', 'https://www.gasgoo.com/', 'html', '零部件与供应链'),
-        ('auto_sae', '中国汽车工程学会', 'https://www.sae-china.org/', 'html', '技术路线与学术'),
-        ('auto_topspeed', 'TopSpeed', 'https://www.topspeed.com/', 'html', '新车与车展'),
+        ('auto_gasgoo', '盖世汽车', 'https://www.gasgoo.com/robot/news/', 'html', '资讯·机器人与供应链'),
+        ('auto_sae', '中国汽车工程学会', 'https://www.sae-china.org/', 'html', '站点JS渲染·暂不可用', False),
+        ('auto_topspeed', 'TopSpeed', 'https://www.topspeed.com/', 'html', '站点关闭·暂不可用', False),
     ]),
     ('材料科学刊', [
         ('mat_natmat', 'Nature Materials', 'https://www.nature.com/nmat', 'issn:1476-1122', '材料顶刊'),
@@ -814,7 +814,7 @@ _NEW_CATS = [
     ('物理天文刊', [
         ('phys_natphys', 'Nature Physics', 'https://www.nature.com/nphys', 'issn:1745-2473', '物理顶刊'),
         ('phys_prl', 'Physical Review Letters', 'https://journals.aps.org/prl', 'issn:0031-9007', '物理顶刊'),
-        ('phys_wulixb', '物理学报', 'https://wulixb.iphy.ac.cn/', 'html', '国内物理核心刊'),
+        ('phys_wulixb', '物理学报', 'https://api.crossref.org/journals/1000-3290/works?rows=20&sort=published&order=desc', 'crossref', '国内物理核心刊·CrossRef'),
         ('phys_aa', 'Astronomy & Astrophysics', 'https://www.aanda.org/', 'issn:0004-6361', '天文学顶刊'),
         ('phys_nastron', 'Nature Astronomy', 'https://www.nature.com/nastron', 'issn:2397-3366', '天文学顶刊'),
         ('phys_prx', 'Physical Review X', 'https://journals.aps.org/prx', 'issn:2160-3308', '开放获取物理刊'),
@@ -826,7 +826,7 @@ _NEW_CATS = [
         ('chem_jacs', 'JACS', 'https://pubs.acs.org/journal/jacsat', 'issn:0002-7863', '化学顶刊'),
         ('chem_anal', 'Analytical Chemistry', 'https://pubs.acs.org/journal/ancham', 'issn:0003-2700', '分析化学顶刊'),
         ('chem_chemrxiv', 'ChemRxiv', 'https://api.crossref.org/works?filter=prefix:10.26434&rows=20&sort=published&order=desc&select=title,DOI,published,published-online,issued,container-title', 'crossref', '化学预印本·换 Crossref 预印本'),
-        ('chem_huaxue', '化学学报', 'http://www.ccspublishing.org.cn/', 'html', '国内化学核心刊'),
+        ('chem_huaxue', '化学学报', 'http://www.ccspublishing.org.cn/news?abbreviation=kexuedongtai', 'html', '科学动态·文章列表'),
         ('chem_angew', 'Angewandte Chemie', 'https://onlinelibrary.wiley.com/journal/15213773', 'issn:1433-7851', '化学顶刊'),
         ('chem_iecr', 'Ind. & Eng. Chem. Research', 'https://pubs.acs.org/journal/iecred', 'issn:0888-5885', '工业化学工程'),
     ]),
@@ -834,17 +834,17 @@ _NEW_CATS = [
         ('agri_natfood', 'Nature Food', 'https://www.nature.com/nfood', 'issn:2662-1355', '食品顶刊'),
         ('agri_jafc', 'J. Agricultural and Food Chemistry', 'https://pubs.acs.org/journal/jafcau', 'issn:0021-8561', '农食化学顶刊'),
         ('agri_foodchem', 'Food Chemistry', 'https://www.journals.elsevier.com/food-chemistry', 'issn:0308-8146', '食品化学顶刊'),
-        ('agri_tcsae', '农业工程学报', 'http://www.tcsae.org/', 'html', '国内农业工程核心刊'),
+        ('agri_tcsae', '农业工程学报', 'http://www.tcsae.org/', 'html', '站点JS渲染·暂不可用', False),
         ('agri_jfp', 'Journal of Food Protection', 'https://www.jfoodprotection.org/', 'issn:0362-028X', '食品安全'),
         ('agri_jas', 'Journal of Agricultural Science', 'https://www.cambridge.org/core/journals/journal-of-agricultural-science', 'issn:0021-8596', '农业科学'),
-        ('agri_aes', '农业环境科学学报', 'https://www.aes.org.cn/', 'html', '国内农业环境核心刊'),
+        ('agri_aes', '农业环境科学学报', 'https://www.aes.org.cn/', 'html', '站点JS渲染·暂不可用', False),
         ('agri_foodfunction', 'Food & Function', 'https://pubs.rsc.org/en/journals/journalissues/c9fo', 'issn:2042-6496', '食品功能'),
     ]),
     ('计算机理论刊', [
         ('cs_acmcs', 'ACM Computing Surveys', 'https://dl.acm.org/journal/csur', 'issn:0360-0300', '计算机综述顶刊'),
-        ('cs_arxiv', 'arXiv 计算机理论', 'https://arxiv.org/list/cs.CC/recent', 'html', '预印本一手源头'),
+        ('cs_arxiv', 'arXiv 计算机理论', 'http://export.arxiv.org/rss/cs.CC', 'rss', '预印本一手源头·官方RSS'),
         ('cs_ieee_it', 'IEEE Trans. Information Theory', 'https://ieeexplore.ieee.org/xpl/RecentIssue.jsp?punumber=18', 'issn:0018-9448', '信息论顶刊'),
-        ('cs_toc', 'Theory of Computing', 'https://theoryofcomputing.org/', 'html', '计算理论开放刊'),
+        ('cs_toc', 'Theory of Computing', 'https://api.crossref.org/journals/1557-3958/works?rows=20&sort=published&order=desc', 'crossref', '计算理论开放刊·CrossRef'),
         ('cs_jacm', 'Journal of the ACM', 'https://dl.acm.org/journal/jacm', 'issn:0004-5411', '计算机顶刊'),
         ('cs_jos', '软件学报', 'https://www.jos.org.cn/', 'html', '国内软件顶刊'),
         ('cs_siam', 'SIAM Journal on Computing', 'https://epubs.siam.org/journal/sico', 'issn:0097-5397', '计算理论顶刊'),
@@ -852,9 +852,9 @@ _NEW_CATS = [
     ]),
     ('法学与治理刊', [
         ('law_hlr', 'Harvard Law Review', 'https://harvardlawreview.org/', 'issn:0017-811X', '法学顶刊'),
-        ('law_zgfx', '中国法学', 'https://zgfx.cbpt.cnki.net/', 'html', '国内法学顶刊'),
+        ('law_zgfx', '中国法学', 'https://zgfx.cbpt.cnki.net/', 'html', '站点JS渲染·暂不可用', False),
         ('law_ejil', 'European Journal of International Law', 'https://ejil.org/', 'issn:0938-5428', '国际法顶刊'),
-        ('law_jilp', 'J. International Law and Politics', 'https://www.jilp.org/', 'html', '国际法与政治'),
+        ('law_jilp', 'J. International Law and Politics', 'https://www.jilp.org/', 'html', '站点无列表·暂不可用', False),
         ('law_ajil', 'American Journal of International Law', 'https://www.asil.org/ajil', 'issn:0002-9300', '国际法顶刊'),
         ('law_icon', 'I·CON 国际宪法学杂志', 'https://www.ijcon.org/', 'issn:1474-2640', '宪法学'),
     ]),
@@ -890,7 +890,9 @@ _NEW_SRC_IDS = set()
 for _c, _rows in _NEW_CATS:
     if _c not in CATS:
         CATS.append(_c)
-    for _sid, _nm, _u, _p, _note in _rows:
+    for _row in _rows:
+        _sid, _nm, _u, _p, _note = _row[:5]
+        _off = len(_row) > 5 and _row[5] is False   # V8.1：第 6 位 False = 源本身不可用，强制关闭
         if _sid in _NEW_SRC_IDS or any(x['id'] == _sid for x in DEFAULT_SOURCES):
             continue
         _NEW_SRC_IDS.add(_sid)
@@ -899,7 +901,8 @@ for _c, _rows in _NEW_CATS:
         _hid = _c in HIDDEN_CATS      # 隐藏分类：不显示也不抓取
         if _hid:
             _note = _note + '·分类已隐藏，默认关闭'
-        DEFAULT_SOURCES.append(S(_sid, _nm, _u, _p, count=20, enabled=not _hid,
+        DEFAULT_SOURCES.append(S(_sid, _nm, _u, _p, count=20,
+                                 enabled=(not _hid) and (not _off),
                                  note=_note, cat=_c))
 # M5.6/V7.3：官方下架的源（用户点名去除）；任何旧配置里残留的都会在加载时被清掉
 _REMOVED_SRC = frozenset(["smzdm", "xueqiu", "cls", "cls_news", "iqiyi", "youpin", "360hot",
@@ -925,6 +928,10 @@ DEFAULT_SETTINGS = {
     "ttsRate": 1.25,
     "sortAgg": "heat",
     "openMode": "app",
+    # V8.0.6：浏览器选择——daily=日常浏览器（正常 profile，插件/书签全在，推荐）
+    # sys=系统默认 / edge / chrome / custom（extBrowserPath）/ app=独立隔离小窗口（旧行为）
+    "extBrowser": "daily",
+    "extBrowserPath": "",    # 自定义浏览器 exe 完整路径
     "showOnlyOk": True,      # 仅显示抓取成功的源
     "startupCheck": True,    # 启动时强制刷新并自动隐藏失败源
     "accent": "",            # 主题配色：空=经典红 / blue / green / violet / cyan / rose / amber
@@ -950,6 +957,9 @@ DEFAULT_SETTINGS = {
     "adDesc": "1700+ 宫格图片，拒绝拍照尴尬，记录每一份美好。",
     "adUrl": "https://pan.baidu.com/s/5gZ0hq4QQPHVSmFj_XYwnnA",
     "adContact": "Q&V：460275097",
+    # V8.0.5：题目缓存（AI 数据源）——每天一个文件夹，JSONL 逐行落盘，可被 AI/智能体直接读取分析
+    "titlesDir": "",         # 题目缓存根目录，空=默认 data_dir()/titles
+    "titlesKeep": 0,         # 历史保留天数：0=永久保留，可选 30/90/365
 }
 
 
@@ -1214,8 +1224,9 @@ class Account:
             return False, "未登录或登录已过期"
         # V7.9.4：推广位不跟着账号云同步（作者在服务端唯一维护，避免账号配置把它覆盖掉）
         # V8.0.2：窗口形式（openMode）属于本机习惯，不进云端，避免换端登录后被改成浏览器模式
+        # V8.0.6：extBrowser/extBrowserPath 同理（每台电脑装的浏览器不一样）
         settings = {k: v for k, v in (settings or {}).items()
-                    if k not in AD_KEYS and k != "openMode"}
+                    if k not in AD_KEYS and k not in ("openMode", "extBrowser", "extBrowserPath")}
         payload = {"settings": settings, "favorites": favorites or [],
                    "ver": APP_VER, "ts": time.time(), "device": _device_id()}
         if custom_sources:
@@ -2061,6 +2072,20 @@ class Config:
         if _ns not in (0, 3, 5, 8, 10, 15, 20):
             self.settings["notifySec"] = 10
             self.save()
+        # V8.0.5：题目缓存配置清洗（目录长度限制 / 保留天数只认 0/30/90/365）
+        _td = str(self.settings.get("titlesDir") or "").strip()
+        if _td != str(self.settings.get("titlesDir") or ""):
+            self.settings["titlesDir"] = _td
+        try:
+            _tk = int(self.settings.get("titlesKeep") or 0)
+        except Exception:
+            _tk = 0
+        if _tk not in (0, 30, 90, 365):
+            _tk = 0
+        if _tk != self.settings.get("titlesKeep") or _td != self.settings.get("titlesDir"):
+            self.settings["titlesKeep"] = _tk
+            self.settings["titlesDir"] = _td
+            self.save()
         if isinstance(raw.get("sources"), list) and raw["sources"]:
             self.sources = self._norm_sources(raw["sources"])
             # M8.1：下线源无条件从旧配置里删除（不依赖 presetVer 是否变化）
@@ -2090,6 +2115,14 @@ class Config:
         if not self.settings.get("catDropVer"):
             self.settings["hideCats"] = strip_drop_cats(self.settings.get("hideCats"))
             self.settings["catDropVer"] = 1
+            self.save()
+        # V8.0.6：浏览器选择清洗（脏值回退 daily）
+        if self.settings.get("extBrowser") not in ("daily", "sys", "edge", "chrome", "custom", "app"):
+            self.settings["extBrowser"] = "daily"
+            self.save()
+        _ebp = str(self.settings.get("extBrowserPath") or "").strip()
+        if _ebp != str(self.settings.get("extBrowserPath") or ""):
+            self.settings["extBrowserPath"] = _ebp
             self.save()
         # M9.1：隐藏分类每次加载都强制生效——旧客户端/云同步把它们塞回来也照样压下去
         #       （侧边栏不显示 + 源关闭不抓取；用户想用某个隐藏分类需在设置里重新开启）
@@ -2175,6 +2208,10 @@ class Config:
                 "id": sid, "name": str(s.get("name") or "未命名")[:24],
                 "url": str(s["url"]).strip(), "parser": str(s.get("parser") or "auto"),
                 "sel": s.get("sel") or {},
+                # V8.1：校准元数据（校准地址/时间/样例哈希），随配置保存与云同步
+                "calib": s.get("calib") or {},
+                # V8.1：检索结果页选择器（校准向导对含 {q} 的地址校准后保存）
+                "search_sel": s.get("search_sel") or {},
                 "count": max(1, min(50, int(s.get("count") or 30))),
                 "enabled": bool(s.get("enabled", True)),
                 "note": str(s.get("note") or "")[:80],
@@ -2210,6 +2247,15 @@ class Config:
         for s in self.sources:
             d = preset.get(s["id"])
             if not d:
+                continue
+            # V8.0.5：用户用「校」锁定的源（calib 有记录）不再被内置清单覆盖，
+            # 否则每次版本升级都会把校准好的地址和提取规则重置回默认。
+            _cb = s.get("calib") if isinstance(s.get("calib"), dict) else {}
+            if _cb.get("url") or _cb.get("at") or (_cb.get("sample") or 0) > 1:
+                if s["id"] in _FORCE_OFF:
+                    s["enabled"] = False
+                if not s.get("name"):
+                    s["name"] = d["name"]
                 continue
             s["url"], s["parser"] = d["url"], d["parser"]
             if s["id"] in _FORCE_OFF:      # M5.7/V7.4：需登录态的源，启动时强制关闭
@@ -2683,6 +2729,67 @@ def decode_bytes(raw, charset=None):
 def http_text(url, referer=None, timeout=14):
     raw, cs = fetch_bytes(url, referer, timeout)
     return decode_bytes(raw, cs)
+
+
+_MOBILE_UA = ("Mozilla/5.0 (Linux; Android 13; M2102J2SC) AppleWebKit/537.36 "
+              "(KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
+
+
+def fetch_page_robust(url, timeout=12):
+    """V8.0.6：校准/测试用韧性抓取——一次失败不放弃，按策略阶梯重试，
+    并把每一步失败原因带回去（前端能显示「为什么失败」而不是笼统的网络错误）。
+    阶梯：默认 UA → 免证书校验 → 手机 UA → https 降级 http（仅 TLS 类错误）。
+    返回 (html, err)；html 为空串表示全部失败，err 是给人看的失败原因串。"""
+    errs = []
+    # ① 默认（带 Cookie/UA/gzip 的常规通道）
+    try:
+        return http_text(url, timeout=timeout), ""
+    except Exception as e:
+        errs.append(_net_err_desc(e))
+    # ② 证书链问题（.gov.cn、期刊官网常见）：免校验重试
+    try:
+        op = _opener(None, no_verify=True)
+        req = urllib.request.Request(url)
+        with op.open(req, timeout=timeout) as r:
+            raw = r.read()
+            enc = (r.headers.get("Content-Encoding") or "").lower()
+            if "gzip" in enc:
+                raw = gzip.decompress(raw)
+        return decode_bytes(raw), ""
+    except Exception as e:
+        errs.append("免证书校验: " + _net_err_desc(e))
+    # ③ 手机 UA（部分站对桌面 UA 返回 403/空壳）
+    try:
+        return _get_html(url, extra={"User-Agent": _MOBILE_UA}, timeout=timeout), ""
+    except Exception as e:
+        errs.append("手机UA: " + _net_err_desc(e))
+    # ④ https 打不通（TLS 握手失败/老加密套件）→ 试 http
+    if url.lower().startswith("https://"):
+        try:
+            u2 = "http://" + url[len("https://"):]
+            return http_text(u2, timeout=timeout), ""
+        except Exception as e:
+            errs.append("http降级: " + _net_err_desc(e))
+    return "", "；".join(errs)
+
+
+def _net_err_desc(e):
+    """把网络异常翻译成人话（前端直接显示）"""
+    s = str(e) or e.__class__.__name__
+    low = s.lower()
+    if isinstance(e, socket.timeout) or "timed out" in low or "timeout" in low:
+        return "连接超时（网站响应太慢或被墙）"
+    if "ssl" in low or "certificate" in low or "cert" in low:
+        return "HTTPS 证书异常"
+    if "getaddrinfo failed" in low or "name or service not known" in low:
+        return "域名解析失败（地址拼错或站点已下线）"
+    if "403" in s:
+        return "网站拒绝访问（403，可能反爬）"
+    if "404" in s:
+        return "页面不存在（404）"
+    if "reset" in low:
+        return "连接被重置（网站或网络中断）"
+    return e.__class__.__name__ + ": " + s[:80]
 
 
 # ------------------------------------------------------------ 证书修复（V7.8.1）
@@ -3266,6 +3373,9 @@ def _rss_unescape(txt):
     txt = (txt.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", '"')
               .replace("&apos;", "'").replace("&#39;", "'").replace("&nbsp;", " ")
               .replace("&amp;", "&"))
+    # V8.1：数字实体（&#8216; 等）也解掉——TechCrunch 等站的标题全是数字实体
+    txt = re.sub(r"&#x([0-9a-fA-F]+);", lambda m: chr(int(m.group(1), 16)) if int(m.group(1), 16) < 0x110000 else "", txt)
+    txt = re.sub(r"&#(\d+);", lambda m: chr(int(m.group(1))) if int(m.group(1)) < 0x110000 else "", txt)
     return re.sub(r"\s+", " ", txt).strip()
 
 
@@ -3676,6 +3786,26 @@ def p_oscar(url=None):
 NAV_WORDS = set("""首页 主页 更多 查看更多 登录 注册 退出 上一页 下一页 下载 详情 评论
 关于我们 联系我们 网站地图 返回顶部 广告 投稿 客户端 排行榜 全部 搜索 立即下载 查看详情
 新闻 体育 娱乐 财经 科技 汽车 房产 旅游 教育 时尚 健康 军事 图片 视频 论坛 博客 专题""".split())
+# V8.1：英文导航词补充（打辅助用，主力是结构排除+统计评分）
+NAV_WORDS.update("""about home more login sign register search contact privacy terms faq help
+archive subscribe advertise careers jobs feedback sitemap english chinese mobile app
+read comments share tweet facebook next prev back submit editors picks newest popular
+trending latest archive articles videos podcasts newsletters magazine webinars members""".split())
+NAV_WORDS.update("""服务协议 隐私政策 法律声明 免责声明 使用条款 用户协议 注册协议
+关于我们 联系方式 加入我们 网站声明 版权声明 网站导航""".split())
+
+
+def _nav_word(t):
+    """导航词判断：去掉书名号/引号后再比对（《用户注册服务协议》→ 用户注册服务协议）"""
+    t = re.sub(r"[《》「」『』\"'“”]", "", t).strip()
+    if t in NAV_WORDS:
+        return True
+    # V8.1：中文站点信息页短链接（关于/用户/隐私…开头的协议声明类，≤14 字）
+    if len(t) <= 14 and re.match(r"^(关于|用户|隐私|法律|免责|使用|网站|版权|服务|注册|登录|投稿|广告)", t) \
+            and re.search(r"(协议|声明|条款|须知|公约|规则|指南)$", t):
+        return True
+    # V8.1：ICP 备案号/版权页脚（京ICP证040089号-1、ICP备xxxxx号 等）
+    return bool(re.search(r"(ICP ?[证备]|备案号|版权所有|©|Copyright)", t, re.I))
 
 
 def _heat_from(text, title=""):
@@ -3749,36 +3879,210 @@ def parse_by_sel(root, url, sel):
     return finish(out)
 
 
-def generic_html(url, base):
-    html = http_text(url)
-    root = parse_html(html)
-    groups = {}
+# ---------------- V8.1 识别机制：让通用解析提取「新闻题目」而不是导航/分类目录 ----------------
+# 四层防线：①DOM 结构排除 ②导航词/URL 形态过滤 ③组级统计评分（替代最大组取胜）④菜单自检宁报错
+
+_NAV_ZONE_RE = re.compile(
+    r"(^|[^a-z0-9])(nav|navbar|topbar|menu|submenu|dropdown|sidebar|aside|breadcrumb|crumbs|"
+    r"footer|pager|pagination|site-header|page-header|main-header|masthead|toolbar|"
+    r"social|share|widget|banner|advert|advertise|copyright|sitemap|skip-link|site-info)([^a-z0-9]|$)")
+_NAV_TAGS = ("nav", "footer", "aside")
+
+
+def _eff_len(t):
+    """有效长度：中日韩字符按 2 计，便于中英文站统一判「标题够不够长」"""
+    return sum(2 if ord(c) > 0x2E80 else 1 for c in t)
+
+
+def _in_nav_zone(a, up=5):
+    """①结构排除：锚点若在 nav/footer/aside 标签或导航样式容器内（向上最多 5 层），判为导航区"""
+    n, d = a.parent, 0
+    while n is not None and d < up:
+        if n.tag in _NAV_TAGS:
+            return True
+        ident = (n.cls + " " + (n.get("id") or "").lower())
+        if ident.strip() and _NAV_ZONE_RE.search(ident):
+            return True
+        n, d = n.parent, d + 1
+    return False
+
+
+def _grp_stats(texts):
+    eff = [_eff_len(t) for t in texts]
+    n = len(eff)
+    med = sorted(eff)[n // 2]
+    mean = sum(eff) / n
+    sd = (sum((x - mean) ** 2 for x in eff) / n) ** 0.5
+    return med, sd
+
+
+def _common_words(texts):
+    """组内所有标题共享的词（菜单高度模板化：如都带 Newest / 都是栏目名）"""
+    sets = [set(w.lower() for w in re.findall(r"[a-zA-Z\u4e00-\u9fff]{2,}", t)) for t in texts]
+    if not sets:
+        return set()
+    com = set(sets[0])
+    for s in sets[1:]:
+        com &= s
+    return com
+
+
+def _headline_score(anchors, texts, kind):
+    """③组级评分：越像「新闻标题列表」分越高；越像菜单/栏目目录分越低"""
+    n = len(texts)
+    if n < 3:
+        return -999.0
+    med, sd = _grp_stats(texts)
+    score = min(med, 60.0) / 10.0          # 标题偏长加分（0~6）
+    score += min(sd, 30.0) / 10.0          # 长短差异：菜单高度均匀，标题参差（0~3）
+    rich = sum(1 for t in texts if re.search(r"[\d【】「」《》！？?\"“”「：:，,|]|…|——", t)) / n
+    score += rich * 2.0                    # 标题常含数字/标点（0~2）
+    com = _common_words(texts)
+    if n >= 4 and com:
+        score -= min(len(com), 8) * 0.8    # 全组共享同一批词 → 模板化菜单，重罚
+    hrefs = [a.get("href") or "" for a in anchors]
+    uniq = len(set(hrefs)) / n
+    score += uniq * 2.0                    # 重复链接惩罚
+    if kind == "cls" and n >= 5:
+        score += 1.0                       # 同 class 签名的重复标记 = 列表条目，加分
+    if med < 12 and sd < 4:
+        score -= 4.0                       # 又短又整齐：典型导航/栏目
+    return score
+
+
+_MENU_MIN_SCORE = 3.0
+
+
+def _looks_like_menu(texts):
+    med, sd = _grp_stats(texts)
+    return med < 14 and sd < 4 and len(texts) >= 5
+
+
+def _html_candidate_groups(root):
+    """收集页面候选列表组。kind='cls' 按锚点 class 签名分组（解决每卡片唯一父元素被拆散），
+    kind='parent' 按父元素分组（兼容旧逻辑）。返回 [(score, kind, key, anchors, texts)]"""
+    cls_g, par_g = {}, {}
     for a in root.find_all("a"):
         href = a.get("href") or ""
-        if not href or href.startswith(("#", "javascript:", "mailto:")):
+        if not href or href.startswith(("#", "javascript:", "mailto:", "tel:")):
             continue
-        if href.lower().endswith((".jpg", ".png", ".gif", ".zip", ".exe", ".apk", ".mp4")):
+        if href.lower().endswith((".jpg", ".jpeg", ".png", ".gif", ".webp", ".zip",
+                                  ".exe", ".apk", ".mp4", ".pdf", ".rar")):
             continue
-        t = a.text(80)
-        if len(t) < 5 or t in NAV_WORDS:
+        t = clean_text(a.text(120))
+        if len(t) < 5 or _nav_word(t):
+            continue
+        if _in_nav_zone(a):          # ①结构排除
             continue
         p = a.parent
         if p is None:
             continue
-        key = (p.tag, " ".join(sorted(p.cls.split()))[:40])
-        groups.setdefault(key, []).append(a)
+        ckey = (a.cls or "")[:70] or "nocls"
+        pkey = p.tag + "|" + " ".join(sorted(p.cls.split()))[:40]
+        cls_g.setdefault(ckey, []).append(a)
+        par_g.setdefault(pkey, []).append(a)
+    groups = []
+    for kind, g in (("cls", cls_g), ("par", par_g)):
+        for key, anchors in g.items():
+            # 去重（同页图片+标题双链接指向同一 URL 的情况）
+            seen, ua, ut = set(), [], []
+            for a in anchors:
+                sig = (clean_text(a.text(120)), a.get("href") or "")
+                if sig in seen:
+                    continue
+                seen.add(sig)
+                ua.append(a)
+                ut.append(re.sub(r"^\d+[\.、\s]*", "", clean_text(a.text(120))).strip())
+            if len(ua) < 3:
+                continue
+            groups.append((_headline_score(ua, ut, kind), kind, key, ua, ut))
+    groups.sort(key=lambda x: -x[0])
+    groups = [(sc, kind, key, a[:150], t[:150]) for sc, kind, key, a, t in groups]
+    return groups
+
+
+def _extract_from_group(anchors, texts, base, url):
+    out = []
+    for a, t in zip(anchors, texts):
+        if not t:
+            continue
+        p = a.parent
+        block = p.text(400) if p is not None else ""
+        out.append(mk_item(t, a.get("href"), _heat_from(block, t), node_img(p), "", base or url))
+    return finish(out)
+
+
+def generic_html(url, base):
+    html, ferr = fetch_page_robust(url)
+    if not html:
+        raise RuntimeError("页面抓取失败：" + (ferr or "网络异常"))
+    root = parse_html(html)
+    groups = _html_candidate_groups(root)
     if not groups:
         raise RuntimeError("页面里没找到列表结构")
-    key, anchors = max(groups.items(), key=lambda kv: len(kv[1]))
-    if len(anchors) < 3:
-        raise RuntimeError("可识别条目太少（%d）" % len(anchors))
-    out = []
-    for a in anchors[:100]:
-        p = a.parent
-        block = p.text(400)
-        out.append(mk_item(re.sub(r"^\d+[\.、\s]*", "", a.text(120)), a.get("href"),
-                           _heat_from(block, a.text(120)), node_img(p), "", base or url))
-    return finish(out)
+    best = groups[0]
+    # ④自检：最高分组太像菜单时，尝试次优分组；全都不像 → 宁可报错不显示假数据
+    chosen = None
+    for sc, kind, key, ua, ut in groups[:5]:
+        if sc >= _MENU_MIN_SCORE and not _looks_like_menu(ut):
+            chosen = (kind, key, ua, ut)
+            break
+    if chosen is None:
+        raise RuntimeError("未能识别新闻列表：页面内容疑似导航栏/分类目录"
+                           "（条目过短且雷同），请用「校准」选择正确列表或改用子页面地址")
+    kind, key, ua, ut = chosen
+    return _extract_from_group(ua, ut, base, url)
+
+
+def _sel_from_group(kind, anchor, parent):
+    """把候选组换算成 parse_by_sel 可用的选择器（锁定用，保证预览即所得）"""
+    if kind == "cls":
+        cl = " ".join((anchor.cls or "").split())
+        if not cl:
+            return None
+        sel_str = "a" + "".join("." + c for c in cl.split())
+        return {"link": sel_str}
+    cl = " ".join((parent.cls or "").split())
+    if not cl:
+        return None
+    sel_str = parent.tag + "".join("." + c for c in cl.split())
+    return {"block": sel_str, "link": "a"}
+
+
+def html_candidates(url, limit=6):
+    """V8.1 校准向导后端：返回页面上最像新闻列表的候选组（含选择器提案+10 条预览）"""
+    if "{q}" in url:
+        # 检索地址校准：用样例关键词实际请求搜索结果页
+        url = url.replace("{q}", urllib.parse.quote("新闻"))
+    html, ferr = fetch_page_robust(url)
+    if not html:
+        raise RuntimeError("页面抓取失败：" + (ferr or "网络异常"))
+    root = parse_html(html)
+    groups = _html_candidate_groups(root)
+    base = "%s://%s" % (urllib.parse.urlparse(url).scheme, urllib.parse.urlparse(url).netloc)
+    out, used = [], set()
+    for sc, kind, key, ua, ut in groups:
+        if len(out) >= limit:
+            break
+        sel = _sel_from_group(kind, ua[0], ua[0].parent)
+        if sel is None:
+            continue
+        sig = json.dumps(sel, sort_keys=True)
+        if sig in used:
+            continue
+        try:
+            preview = parse_by_sel(root, url, sel)[:10]
+        except Exception:
+            continue
+        if len(preview) < 3:
+            continue
+        used.add(sig)
+        out.append({"kind": kind, "count": len(ua), "score": round(sc, 1),
+                    "menu": bool(_looks_like_menu(ut)), "sel": sel,
+                    "sample": [t[:60] for t in ut[:5]],
+                    "preview": [{"title": clean_text(i.get("title", ""))[:60],
+                                 "url": i.get("url", "")} for i in preview]})
+    return out
 
 
 def p_360news(url):
@@ -4622,6 +4926,182 @@ class Store:
 STORE = Store()
 REFRESH_GAP = 150
 
+
+# ---------------------------------------------------------------- V8.0.5 题目缓存（AI 数据源）
+# 每天一个文件夹 titles/YYYY-MM-DD/，每个分类一个 .jsonl + 当天合并 _all.jsonl。
+# 每行一条 JSON：{"ts","cat","src","sid","title","url","heat"}，
+# 供 AI / 智能体（WorkBuddy 等）直接按行流式读取做趋势分析、每日推送、标的关联等。
+# 写盘走后台队列线程（2 秒一批），绝不阻塞抓取与页面显示。
+
+_TL_LOCK = threading.Lock()
+_TL_SEEN = {"day": "", "dir": "", "urls": set()}   # 当天已记录 url（重启后从磁盘补齐，跨天/换目录自动重置）
+_TL_QUEUE = []                          # 待写缓冲：[(day, ts_str, cats, sname, sid, title, url, heat)]
+_TL_CLEAN = {"day": ""}                 # 每天清理一次过期文件夹
+
+
+def titles_dir():
+    d = str(CFG.settings.get("titlesDir") or "").strip()
+    if not d:
+        d = os.path.join(data_dir(), "titles")
+    return d
+
+
+def _tl_safe_name(cat):
+    name = re.sub(r'[\\/:*?"<>|\r\n]', "_", str(cat or "未分类")).strip()
+    return (name or "未分类")[:40]
+
+
+def _tl_load_seen(day):
+    """重启后把当天已有记录的 url 读进内存，避免重复落盘"""
+    urls = set()
+    d = os.path.join(titles_dir(), day)
+    try:
+        for fn in os.listdir(d):
+            if not fn.endswith(".jsonl"):
+                continue
+            with open(os.path.join(d, fn), "r", encoding="utf-8") as f:
+                for line in f:
+                    try:
+                        urls.add(json.loads(line).get("url"))
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+    return urls
+
+
+def titles_log(src, items):
+    """把一个源刚抓到的题目排入写盘队列（去重：同一天同一条 url 只记一次）"""
+    try:
+        if not items or not isinstance(items, list):
+            return
+        now = time.time()
+        day = time.strftime("%Y-%m-%d", time.localtime(now))
+        ts = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(now))
+        cats = split_cat(src.get("cat")) or ["未分类"]
+        sname = str(src.get("name") or src.get("id") or "")[:40]
+        sid = str(src.get("id") or "")[:40]
+        with _TL_LOCK:
+            _cur_dir = titles_dir()
+            if _TL_SEEN["day"] != day or _TL_SEEN.get("dir") != _cur_dir:
+                # V8.0.6：换目录也要重新补齐去重集合，否则切目录后同一天会重复落盘
+                _TL_SEEN["day"] = day
+                _TL_SEEN["dir"] = _cur_dir
+                _TL_SEEN["urls"] = _tl_load_seen(day)
+            seen = _TL_SEEN["urls"]
+            rows = []
+            for it in items:
+                if not isinstance(it, dict):
+                    continue
+                u = str(it.get("url") or "").strip()
+                if not u or u in seen:
+                    continue
+                seen.add(u)
+                rows.append((day, ts, cats, sname, sid,
+                             str(it.get("title") or "")[:160], u, it.get("heat")))
+            if rows:
+                _TL_QUEUE.extend(rows)
+    except Exception:
+        pass
+
+
+def titles_ensure_readme():
+    """缓存根目录放一份给 AI 看的数据说明，智能体读到它就知道字段怎么用"""
+    try:
+        root = titles_dir()
+        os.makedirs(root, exist_ok=True)
+        p = os.path.join(root, "README-AI.txt")
+        if os.path.exists(p):
+            return
+        txt = (
+            "热榜助手 · 题目缓存数据说明（给 AI / 智能体）\n"
+            "=============================================\n"
+            "目录结构：titles/YYYY-MM-DD/<分类>.jsonl（每天一个文件夹，按分类分文件）\n"
+            "          titles/YYYY-MM-DD/_all.jsonl（当天全部分类合并流，一次读一天）\n"
+            "文件格式：JSONL，每行一条独立的 JSON 对象，可直接按行流式解析。\n"
+            "字段说明：\n"
+            '  ts    抓取时间，如 "2026-11-20 09:31:05"\n'
+            '  cat   新闻源所属分类（多分类用 / 连接），如 "财经"\n'
+            '  src   新闻源名称，如 "华尔街见闻"\n'
+            '  sid   新闻源内部 id\n'
+            '  title 标题（最长 160 字）\n'
+            '  url   原文链接（同一天内 url 唯一，可做主键去重）\n'
+            '  heat  热度数值（可能为 null）\n'
+            "使用建议：\n"
+            "  · 分析某天热点：读当天 _all.jsonl 即可。\n"
+            "  · 趋势分析：按日期文件夹顺序读多天，统计关键词/标的出现频率变化。\n"
+            "  · 标的关联：维护关注词表（公司名/股票简称），每日扫描 title 命中情况。\n"
+            "  · 提醒：标题是二手信号，分析结论适合做研究线索参考，不构成投资建议。\n"
+        )
+        with open(p, "w", encoding="utf-8") as f:
+            f.write(txt)
+    except Exception:
+        pass
+
+
+def titles_cleanup():
+    """按 titlesKeep 清理过期日期文件夹（0=永久保留；每天最多执行一次）"""
+    try:
+        keep = 0
+        try:
+            keep = int(CFG.settings.get("titlesKeep") or 0)
+        except Exception:
+            keep = 0
+        if keep <= 0:
+            return
+        root = titles_dir()
+        if not os.path.isdir(root):
+            return
+        cutoff = time.time() - keep * 86400
+        for fn in os.listdir(root):
+            d = os.path.join(root, fn)
+            if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", fn) or not os.path.isdir(d):
+                continue
+            try:
+                if os.path.getmtime(d) < cutoff:
+                    import shutil
+                    shutil.rmtree(d, ignore_errors=True)
+                    log("题目缓存清理：%s（超过 %d 天）" % (fn, keep))
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+
+def _tl_flush_loop():
+    """后台落盘线程：2 秒一批把队列写进 JSONL，写失败只记日志不影响主流程"""
+    while True:
+        time.sleep(2)
+        try:
+            with _TL_LOCK:
+                if not _TL_QUEUE:
+                    continue
+                batch, _TL_QUEUE[:] = list(_TL_QUEUE), []
+            by_file = {}
+            for day, ts, cats, sname, sid, title, url, heat in batch:
+                rec = {"ts": ts, "cat": "/".join(cats), "src": sname, "sid": sid,
+                       "title": title, "url": url, "heat": heat}
+                line = json.dumps(rec, ensure_ascii=False)
+                for c in cats:
+                    by_file.setdefault((day, _tl_safe_name(c)), []).append(line)
+                by_file.setdefault((day, "_all"), []).append(line)
+            root = titles_dir()
+            for (day, fn), lines in by_file.items():
+                d = os.path.join(root, day)
+                os.makedirs(d, exist_ok=True)
+                with open(os.path.join(d, fn + ".jsonl"), "a", encoding="utf-8") as f:
+                    f.write("\n".join(lines) + "\n")
+            today = time.strftime("%Y-%m-%d")
+            if _TL_CLEAN["day"] != today:
+                _TL_CLEAN["day"] = today
+                titles_ensure_readme()
+                titles_cleanup()
+        except Exception as e:
+            log("题目缓存写入失败: %r" % (e,))
+
+
+threading.Thread(target=_tl_flush_loop, daemon=True).start()
+
 # 同一源同时只允许一个线程在抓：定时预取与用户请求不再重复抓同一个源，
 # 省下线程池资源，整批速度更快
 _INFLIGHT = {}
@@ -4675,6 +5155,9 @@ def refresh_source(src, force=False):
                 STORE.put(sid, old.get("items", []), msg)
         if items is not None:
             STORE.put(sid, items, "")
+            # V8.0.5：题目入缓存队列（按天 JSONL，供 AI 分析；后台线程落盘不阻塞）
+            if items:
+                titles_log(src, items)
     finally:
         with _INFLIGHT_LK:
             _INFLIGHT.pop(sid, None)
@@ -5371,6 +5854,29 @@ class Handler(BaseHTTPRequestHandler):
                             "settings": CFG.settings, "sources": CFG.sources,
                             "favorites": CFG.favorites, "history": CFG.history,
                             "dataDir": data_dir()})
+            elif path == "/api/titles/info":
+                # V8.0.5：题目缓存目录信息（前端设置页显示 + 一键复制）
+                # V8.0.6：任何异常都不许让前端只看到「服务未响应」——目录必须回给前端
+                try:
+                    d = titles_dir()
+                    try:
+                        os.makedirs(d, exist_ok=True)
+                    except Exception:
+                        pass
+                    try:
+                        files = sorted([x for x in os.listdir(d)
+                                        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", x)])[-7:] \
+                                if os.path.isdir(d) else []
+                    except Exception:
+                        files = []
+                    self._json({"ok": True, "dir": d, "keep": int(CFG.settings.get("titlesKeep") or 0),
+                                "days": files, "desktop": True, "dataDir": data_dir(),
+                                "exists": os.path.isdir(d)})
+                except Exception as e:
+                    log("titles/info 失败: %r" % (e,))
+                    self._json({"ok": False, "error": str(e)[:120],
+                                "dir": os.path.join(data_dir(), "titles"),
+                                "keep": 0, "desktop": True, "dataDir": data_dir()})
             elif path == "/api/hot":
                 ids = [x for x in (qs.get("ids", [""])[0] or "").split(",") if x]
                 force = qs.get("force", ["0"])[0] == "1"
@@ -5417,8 +5923,56 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/test":
                 url = qs.get("url", [""])[0]
                 pid = qs.get("parser", ["auto"])[0]
-                items = run_parser({"url": url, "parser": pid}, url)
-                self._json({"ok": True, "count": len(items), "sample": items[:5]})
+                sel = {}
+                try:
+                    sel = json.loads(qs.get("sel", [""])[0] or "{}") or {}
+                except Exception:
+                    sel = {}
+                # V8.0.6：异常必须回 JSON 明细（以前裸抛 → 前端只看到笼统的「解析失败」）
+                try:
+                    items = run_parser({"url": url, "parser": pid, "sel": sel}, url)
+                    self._json({"ok": True, "count": len(items), "sample": items[:5]})
+                except Exception as e:
+                    self._json({"ok": False, "error": str(e)[:160]})
+            elif path == "/api/browsercheck":
+                # V8.0.6：探测本机可用的浏览器（设置页「检测」按钮用）
+                found = {os.path.basename(p).lower(): p for p in _edge_chrome_paths()}
+                self._json({"ok": True, "browsers": found,
+                            "edge": found.get("msedge.exe", ""),
+                            "chrome": found.get("chrome.exe", ""),
+                            "custom": _browser_exe("custom")})
+            elif path == "/api/candidates":
+                # V8.1 校准向导：枚举页面上可能的新闻列表（候选组+选择器提案+预览）
+                url = qs.get("url", [""])[0].strip()
+                if not url.lower().startswith(("http://", "https://")) and "{q}" not in url:
+                    self._json({"ok": False, "error": "地址无效"})
+                else:
+                    try:
+                        self._json({"ok": True, "candidates": html_candidates(url)})
+                    except Exception as e:
+                        self._json({"ok": False, "error": str(e)[:120]})
+            elif path == "/api/searchsrc":
+                # V8.1 源内检索：按源的搜索地址+校准的 search_sel 解析检索结果
+                sid = qs.get("id", [""])[0]
+                q = (qs.get("q", [""])[0] or "").strip()[:40]
+                s = next((x for x in CFG.sources if x["id"] == sid), None)
+                if not s or not (s.get("search") or "").strip():
+                    self._json({"ok": False, "error": "该源没有搜索地址"})
+                elif not q:
+                    self._json({"ok": False, "error": "关键词为空"})
+                else:
+                    try:
+                        u = s["search"].replace("{q}", urllib.parse.quote(q))
+                        sel = s.get("search_sel") or {}
+                        if not sel:
+                            # 未校准搜索页：退回通用识别（评分机制会拒绝导航栏）
+                            sel = {}
+                        items = run_parser({"url": u, "parser": "auto", "sel": sel}, u)
+                        self._json({"ok": True, "count": len(items),
+                                    "items": [{"title": clean_text(i.get("title", "")),
+                                               "url": i.get("url", "")} for i in items[:30]]})
+                    except Exception as e:
+                        self._json({"ok": False, "error": str(e)[:120]})
             elif path == "/api/default_sources":
                 self._json({"ok": True, "sources": deep_copy(DEFAULT_SOURCES)})
             elif path == "/api/tts/audio":
@@ -5593,7 +6147,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"ok": True, "items": cert_issues_payload()})
                 return
             if p.path == "/api/openurl":
-                # V7.9.5：桌面版点源圆点 → 用系统默认浏览器打开（网页版不执行，防止远端拿服务端开浏览器）
+                # V7.9.5：桌面版点源圆点 → 打开浏览器（网页版不执行，防止远端拿服务端开浏览器）
+                # V8.0.6：改走 open_external——默认用户日常浏览器（插件/书签全在）
                 u = str(body.get("url") or "").strip()
                 if not (u.startswith("http://") or u.startswith("https://")):
                     self._json({"ok": False, "error": "地址不合法"})
@@ -5601,13 +6156,36 @@ class Handler(BaseHTTPRequestHandler):
                 if os.environ.get("REBANG_NO_BROWSER") == "1" and not os.environ.get("REBANG_ALLOW_OPEN"):
                     self._json({"ok": False, "error": "helmet"})
                     return
-                ok = False
-                try:
-                    import webbrowser
-                    ok = bool(webbrowser.open(u))
-                except Exception as e:
-                    log("打开外链失败: %r" % (e,))
+                ok = open_external(u)
+                if not ok:
+                    try:
+                        import webbrowser
+                        ok = bool(webbrowser.open(u))
+                    except Exception as e:
+                        log("打开外链失败: %r" % (e,))
                 self._json({"ok": ok})
+                return
+            if p.path == "/api/pickfile":
+                # V8.0.6：Windows 原生「选择文件」对话框（ctypes，无 tkinter 依赖）——选自定义浏览器 exe
+                if os.name != "nt":
+                    self._json({"ok": False, "error": "仅桌面版支持"})
+                    return
+                try:
+                    import ctypes
+                    from ctypes import wintypes
+                    buf = ctypes.create_unicode_buffer(520)
+                    ofn = wintypes.OPENFILENAMEW()
+                    ofn.lStructSize = ctypes.sizeof(wintypes.OPENFILENAMEW)
+                    ofn.hwndOwner = None
+                    ofn.lpstrFilter = "浏览器程序 (*.exe)\0*.exe\0所有文件 (*.*)\0*.*\0\0"
+                    ofn.lpstrFile = buf
+                    ofn.nMaxFile = 520
+                    ofn.lpstrTitle = "选择浏览器可执行文件（chrome.exe / msedge.exe…）"
+                    ofn.Flags = 0x00080000  # OFN_FILEMUSTEXIST
+                    ok = bool(ctypes.windll.comdlg32.GetOpenFileNameW(ctypes.byref(ofn)))
+                    self._json({"ok": ok, "path": buf.value if ok else ""})
+                except Exception as e:
+                    self._json({"ok": False, "error": str(e)[:120]})
                 return
             if p.path == "/api/ad":
                 # V7.9.4：只有作者（管理员邮箱登录）能改推广位；改完全网客户端下次启动自动同步
@@ -5637,6 +6215,12 @@ class Handler(BaseHTTPRequestHandler):
                     for k in AD_KEYS:
                         st.pop(k, None)
                     body["settings"] = st
+                # V8.0.5：题目缓存的目录/保留天数不随云端配置覆盖（各设备本地路径不同）
+                if isinstance(body.get("settings"), dict):
+                    st = dict(body["settings"])
+                    st.pop("titlesDir", None)
+                    st.pop("titlesKeep", None)
+                    body["settings"] = st
                 res = CFG.update(body)
                 valid = {s["id"] for s in CFG.sources}
                 with STORE.lock:
@@ -5649,6 +6233,89 @@ class Handler(BaseHTTPRequestHandler):
                     threading.Thread(target=ACCOUNT.cloud_push,
                                      args=(dict(CFG.settings), list(CFG.favorites)),
                                      daemon=True).start()
+            # ---------------- V8.0.5：题目缓存目录（AI 数据源） ----------------
+            elif p.path == "/api/titles/dir":
+                # body: {dir?: 新目录（空=恢复默认）, keep?: 0/30/90/365}
+                req = body or {}
+                ok = True
+                if "dir" in req:
+                    nd = str(req.get("dir") or "").strip()
+                    if nd:
+                        if len(nd) > 260 or "\n" in nd or "\r" in nd:
+                            self._json({"ok": False, "error": "目录路径不合法"})
+                            return
+                        try:
+                            os.makedirs(nd, exist_ok=True)
+                        except Exception as e:
+                            self._json({"ok": False, "error": "无法创建目录：%s" % e})
+                            return
+                        if not os.access(nd, os.W_OK):
+                            self._json({"ok": False, "error": "目录不可写，请换一个位置"})
+                            return
+                    CFG.settings["titlesDir"] = nd
+                if "keep" in req:
+                    try:
+                        k = int(req.get("keep") or 0)
+                    except Exception:
+                        k = 0
+                    CFG.settings["titlesKeep"] = k if k in (0, 30, 90, 365) else 0
+                CFG.save()
+                titles_ensure_readme()
+                self._json({"ok": ok, "dir": titles_dir(),
+                            "keep": int(CFG.settings.get("titlesKeep") or 0)})
+            elif p.path == "/api/titles/pickdir":
+                # V8.0.6：Windows 原生「选择文件夹」对话框（ctypes，无额外依赖）
+                if os.name != "nt":
+                    self._json({"ok": False, "error": "仅桌面版支持"})
+                    return
+                try:
+                    import ctypes
+                    from ctypes import wintypes
+
+                    class BROWSEINFOW(ctypes.Structure):
+                        _fields_ = [("hwndOwner", wintypes.HWND), ("pidlRoot", ctypes.c_void_p),
+                                    ("pszDisplayName", wintypes.LPWSTR), ("lpszTitle", wintypes.LPCWSTR),
+                                    ("ulFlags", wintypes.UINT), ("lpfn", ctypes.c_void_p),
+                                    ("lParam", wintypes.LPARAM), ("iImage", ctypes.c_int)]
+
+                    shell32 = ctypes.windll.shell32
+                    shell32.SHBrowseForFolderW.restype = ctypes.c_void_p
+                    shell32.SHGetPathFromIDListW.argtypes = [ctypes.c_void_p, wintypes.LPWSTR]
+                    disp = ctypes.create_unicode_buffer(520)
+                    bi = BROWSEINFOW()
+                    bi.pszDisplayName = ctypes.cast(disp, wintypes.LPWSTR)
+                    bi.lpszTitle = "选择题目缓存目录（软件会在里面按天建日期文件夹）"
+                    bi.ulFlags = 0x00000040 | 0x00000010      # BIF_NEWDIALOGSTYLE | BIF_EDITBOX
+                    pidl = shell32.SHBrowseForFolderW(ctypes.byref(bi))
+                    if not pidl:
+                        self._json({"ok": False, "cancel": True})
+                        return
+                    path = ctypes.create_unicode_buffer(520)
+                    got = shell32.SHGetPathFromIDListW(pidl, path)
+                    try:
+                        ctypes.windll.ole32.CoTaskMemFree(ctypes.c_void_p(pidl))
+                    except Exception:
+                        pass
+                    self._json({"ok": bool(got), "path": path.value})
+                except Exception as e:
+                    self._json({"ok": False, "error": str(e)[:120]})
+                return
+            elif p.path == "/api/titles/open":
+                # 桌面版：资源管理器打开缓存目录（网页版无意义，前端会隐藏按钮）
+                d = titles_dir()
+                ok, err = False, ""
+                try:
+                    os.makedirs(d, exist_ok=True)
+                    if os.name == "nt":
+                        os.startfile(d)      # noqa: S606
+                    else:
+                        import subprocess
+                        subprocess.Popen(["open" if sys.platform == "darwin" else "xdg-open", d])
+                    ok = True
+                except Exception as e:
+                    err = str(e)[:120]
+                    log("打开题目缓存目录失败: %r" % (e,))
+                self._json({"ok": ok, "dir": d, "error": err})
             # ---------------- M8.0：账号与云同步 ----------------
             elif p.path == "/api/auth/sendcode":
                 # 发送邮箱验证码。body: {email, purpose: 'register'|'reset'}
@@ -5711,6 +6378,8 @@ class Handler(BaseHTTPRequestHandler):
                 # V8.0.2：窗口形式不跟云端走（独立窗口是本机默认，别被别端的设置顶掉）
                 if isinstance(r.get("settings"), dict):
                     r["settings"].pop("openMode", None)
+                    r["settings"].pop("extBrowser", None)      # V8.0.6：本机习惯不跟云端
+                    r["settings"].pop("extBrowserPath", None)
                 res = CFG.update(r)
                 if isinstance(r.get("favorites"), list):
                     CFG.favorites = r["favorites"]
@@ -6123,13 +6792,16 @@ def _probe_instance(port):
 
 
 def focus_existing_window():
-    """找到标题含软件名的可见窗口并置前（成功返回 True）"""
+    """找到标题含软件名的可见窗口并置前（成功返回 True）。
+    V8.0.4：只在「标题里的版本号等于当前版本」时才聚焦——
+    桌面上如果还留着旧版窗口（V8.0.2 等），以前会被当成本程序的窗口聚焦过去，
+    用户看到的就是「打开还是上一代的版本号码」，所以旧版窗口一律跳过。"""
     if os.name != "nt":
         return False
     try:
         import ctypes
         u = ctypes.windll.user32
-        found = []
+        found = []          # [(hwnd, title)]
         CB = ctypes.WINFUNCTYPE(ctypes.c_ssize_t, ctypes.c_ssize_t, ctypes.c_ssize_t)
 
         def _cb(hwnd, _lp):
@@ -6140,17 +6812,30 @@ def focus_existing_window():
                         buf = ctypes.create_unicode_buffer(n + 1)
                         u.GetWindowTextW(hwnd, buf, n + 1)
                         if APP_NAME in buf.value:
-                            found.append(hwnd)
+                            found.append((hwnd, buf.value))
             except Exception:
                 pass
             return 1
 
         u.EnumWindows(CB(_cb), 0)
-        if found:
-            hwnd = found[0]
-            u.ShowWindow(hwnd, 9)  # SW_RESTORE：最小化则还原
-            u.SetForegroundWindow(hwnd)
-            return True
+        if not found:
+            return False
+
+        def _ver_of(title):
+            m = re.search(r"[Vv](\d+\.\d+(?:\.\d+)?)", title or "")
+            return m.group(1) if m else ""
+
+        cur = [(h, t) for h, t in found if _ver_of(t) == APP_VER]
+        pick = cur[0] if cur else None
+        if pick is None:
+            # 没有当前版本的窗口：宁可开新窗口，也不聚焦旧版/其它程序的窗口
+            log("跳过 %d 个非当前版本的窗口：%s"
+                % (len(found), ", ".join(t[:28] for _, t in found[:4])))
+            return False
+        hwnd = pick[0]
+        u.ShowWindow(hwnd, 9)  # SW_RESTORE：最小化则还原
+        u.SetForegroundWindow(hwnd)
+        return True
     except Exception as e:
         log("聚焦已有窗口失败: %r" % (e,))
     return False
@@ -6225,19 +6910,40 @@ def acquire_port():
     # 互斥体守卫：旧版本实例 → 自动关闭后本次接管；同版本 → 唤醒窗口后退出
     if _mutex_held():
         info = _probe_instance(SINGLE_PORT)
+        if not info:
+            # V8.0.4：可能是「另一个实例刚双击、还在解压/初始化，没开始监听」。
+            # 以前这里直接 sys.exit(0)，用户连点两下图标就会出现「两次都没反应 / 闪退」。
+            # 现在等它就绪（最多 8 秒），再唤出它的窗口。
+            log("检测到已有实例的互斥体，等待它启动完成…")
+            for _ in range(16):
+                time.sleep(0.5)
+                info = _probe_instance(SINGLE_PORT)
+                if info:
+                    break
+            if not info:
+                log("互斥体存在但 8 秒内没有实例监听端口，本次接管启动")
+                info = None
         if info and _kill_stale_instance():
             log("检测到旧版本实例，已自动关闭，本次启动接管")
-        else:
+        elif info:
             shown = False
-            if info:
+            try:
+                _LOCAL_OPENER.open(
+                    "http://127.0.0.1:%d/api/show" % SINGLE_PORT, timeout=4)
+                shown = True
+            except Exception:
+                pass
+            if not shown:
+                shown = focus_existing_window()
+            if not shown:
+                # V8.0.4：已有实例在跑却唤不出窗口 → 直接给它开一个新窗口，
+                # 绝不让用户看到「双击图标什么都没发生」。
+                log("唤醒已有实例失败，改为直接打开窗口")
                 try:
-                    _LOCAL_OPENER.open(
-                        "http://127.0.0.1:%d/api/show" % SINGLE_PORT, timeout=4)
+                    open_window("http://127.0.0.1:%d/" % SINGLE_PORT)
                     shown = True
                 except Exception:
                     pass
-            if not shown:
-                shown = focus_existing_window()
             log("单实例守卫：已有实例在运行，本次启动退出（shown=%s）" % shown)
             sys.exit(0)
     s = socket.socket()
@@ -6271,7 +6977,12 @@ def acquire_port():
             _LOCAL_OPENER.open(
                 "http://127.0.0.1:%d/api/show" % SINGLE_PORT, timeout=4)
         except Exception:
-            pass
+            # V8.0.4：/api/show 没响应时别静默退出，用户会以为程序坏了
+            if not focus_existing_window():
+                try:
+                    open_window("http://127.0.0.1:%d/" % SINGLE_PORT)
+                except Exception:
+                    pass
         log("检测到已有实例在运行，本次启动退出")
         sys.exit(0)
     return free_port()
@@ -6309,39 +7020,161 @@ def _edge_chrome_paths():
     return out
 
 
-def open_window(url):
-    """V8.0.2：默认「独立窗口」——用 Edge/Chrome 的 --app 模式开无地址栏窗口。
-    以前偶尔会退回默认浏览器（普通标签页），现在改为：
-      ① 专用用户目录 + --app，保证永远是新窗口而不是并到已有浏览器里；
-      ② 找不到浏览器时依次换 Chrome、再换默认浏览器，并写日志。"""
-    if os.environ.get("REBANG_NO_BROWSER"):
-        return True
-    mode = CFG.settings.get("openMode", "app")
-    if mode != "app":
+def _profile_dir():
+    """V8.0.4：独立窗口的浏览器用户目录。data 目录不可写时退回临时目录，
+    避免 Edge 拿到一个写不进去的 --user-data-dir 直接闪退（表现为「双击没反应」）。"""
+    cands = [os.path.join(data_dir(), "独立窗口"),
+             os.path.join(os.environ.get("TEMP") or os.path.expanduser("~"),
+                          "rebang_win_profile")]
+    for p in cands:
+        try:
+            os.makedirs(p, exist_ok=True)
+            probe = os.path.join(p, ".rebang_w")
+            with open(probe, "w", encoding="utf-8") as f:
+                f.write("1")
+            os.remove(probe)
+            return p
+        except Exception as e:
+            log("窗口用户目录不可用(%s): %r" % (p, e))
+    return ""
+
+
+def _spawn_ok(exe, args, wait=1.3):
+    """启动浏览器并确认它没有立刻退出。
+    V8.0.4：以前只要 Popen 不抛异常就当成功，浏览器随后闪退时窗口会「凭空消失」，
+    用户看到的就是打不开 / 打开了别的东西。现在等一小会儿看进程是否还活着。"""
+    try:
+        p = subprocess.Popen([exe] + args, close_fds=True,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception as e:
+        log("启动失败 %s: %r" % (os.path.basename(exe), e))
+        return False
+    t0 = time.time()
+    while time.time() - t0 < wait:
+        if p.poll() is not None:
+            log("浏览器进程提前退出(%s, code=%s)，换下一个方案"
+                % (os.path.basename(exe), p.returncode))
+            return False
+        time.sleep(0.12)
+    return True
+
+
+def _default_browser_kind():
+    """V8.0.6：读 Windows 的默认浏览器（https 关联），返回 'chrome'/'edge'/''。
+    用户选「日常浏览器」时优先用它，没有再用 Edge 兜底。"""
+    if os.name != "nt":
+        return ""
+    try:
+        import winreg
+        key = r"Software\Microsoft\Windows\Shell\Associations\UrlAssociations\https\UserChoice"
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key) as k:
+            prog = str(winreg.QueryValueEx(k, "ProgId")[0] or "")
+        low = prog.lower()
+        if "chrome" in low:
+            return "chrome"
+        if "edge" in low or "msedge" in low:
+            return "edge"
+    except Exception:
+        pass
+    return ""
+
+
+def _browser_exe(kind):
+    """V8.0.6：按名称定位浏览器 exe。edge/chrome 走 _edge_chrome_paths，
+    custom 用用户在设置里填的路径。找不到返回空串。"""
+    if kind == "custom":
+        p = str(CFG.settings.get("extBrowserPath") or "").strip().strip('"')
+        return p if p and os.path.exists(p) else ""
+    want = {"edge": "msedge.exe", "chrome": "chrome.exe"}.get(kind)
+    if not want:
+        return ""
+    for p in _edge_chrome_paths():
+        if os.path.basename(p).lower() == want:
+            return p
+    return ""
+
+
+def _spawn_app_window(url):
+    """V8.0.7：隔离「独立窗口」方案链（Edge/Chrome --app + 专用 profile）。
+    主窗口默认走这里；外链选「独立窗口」也走这里。"""
+    base = ["--window-size=1320,880", "--no-first-run", "--no-default-browser-check",
+            "--disable-features=Translate,msEdgeSidebarV2,msFeedScreenshot"]
+    prof = _profile_dir()
+    plans = []
+    if prof:
+        plans.append(["--user-data-dir=" + prof, "--app=" + url] + base)
+    plans.append(["--app=" + url] + base)
+    if prof:
+        plans.append(["--user-data-dir=" + prof, "--new-window", url] + base)
+    plans.append(["--new-window", url] + base)
+    for exe in _edge_chrome_paths():
+        for args in plans:
+            if _spawn_ok(exe, args):
+                log("已用独立窗口打开：%s %s" % (os.path.basename(exe),
+                                              "app" if "--app=" + url in args else "window"))
+                return True
+    return False
+
+
+def open_external(url):
+    """V8.0.7：按设置用「用户选定的浏览器」打开外链（点新闻源「更多」等）。
+    关键点：不带 --user-data-dir、不带 --app —— 直接把 URL 交给浏览器，
+    打开的就是用户日常那个带插件、带书签、带登录状态的正常环境。
+    daily=本机默认浏览器(Chrome/Edge 正常 profile) → sys=系统默认 → app=隔离独立窗口。
+    返回 True 表示已交给浏览器（浏览器接管既有实例时进程会立刻退出，属正常）。"""
+    mode = str(CFG.settings.get("extBrowser") or "daily")
+    if mode == "app":
+        if _spawn_app_window(url):
+            return True
+        log("独立窗口打不开，退回系统默认浏览器")
         try:
             import webbrowser
-            webbrowser.open(url)
-            return True
+            return bool(webbrowser.open(url))
         except Exception:
             return False
-    prof = os.path.join(data_dir(), "独立窗口")
-    try:
-        os.makedirs(prof, exist_ok=True)
-    except Exception:
-        prof = ""
-    flags = ["--app=" + url, "--window-size=1320,880",
-             "--no-first-run", "--no-default-browser-check",
-             "--disable-features=Translate,msEdgeSidebarV2,msFeedScreenshot"]
-    if prof:
-        flags.insert(1, "--user-data-dir=" + prof)
-    for exe in _edge_chrome_paths():
-        for extra in (flags, [f for f in flags if not f.startswith("--user-data-dir")]):
-            try:
-                subprocess.Popen([exe] + extra, close_fds=True)
+    order = []
+    if mode == "daily":
+        # 先试 Windows 默认浏览器（若为 Chrome/Edge），再用其余已装浏览器兜底
+        dk = _default_browser_kind()
+        first = _browser_exe(dk) if dk else ""
+        order = ([first] if first else []) + \
+                [p for p in _edge_chrome_paths() if p != first]
+    elif mode in ("edge", "chrome", "custom"):
+        exe = _browser_exe(mode)
+        order = [exe] if exe else []
+    for exe in order:
+        try:
+            subprocess.Popen([exe, url], close_fds=True,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            log("已用日常浏览器打开：%s" % os.path.basename(exe))
+            return True
+        except Exception as e:
+            log("启动浏览器失败 %s: %r" % (exe, e))
+    if mode in ("daily", "sys"):
+        try:
+            import webbrowser
+            if webbrowser.open(url):
+                log("已用系统默认浏览器打开")
                 return True
-            except Exception as e:
-                log("启动独立窗口失败(%s): %r" % (os.path.basename(exe), e))
-    log("没找到 Edge/Chrome，退回默认浏览器")
+        except Exception as e:
+            log("系统默认浏览器打开失败: %r" % (e,))
+    return False
+
+
+def open_window(url):
+    """V8.0.7：主窗口默认「独立窗口」（隔离 --app，像普通软件一样，V8.0.4 行为）。
+    只有 设置→常规→窗口形式 明确选了「默认浏览器」时才进浏览器
+    （进哪个浏览器由「用哪个浏览器打开」extBrowser 决定）。
+    extBrowser 只管外链跳转（/api/openurl）。"""
+    if os.environ.get("REBANG_NO_BROWSER"):
+        return True
+    if str(CFG.settings.get("openMode") or "app") == "browser":
+        if open_external(url):
+            return True
+        log("浏览器方式打不开，退回隔离独立窗口")
+    if _spawn_app_window(url):
+        return True
+    log("独立窗口所有方案都失败，退回默认浏览器")
     try:
         import webbrowser
         webbrowser.open(url)
@@ -6422,14 +7255,69 @@ ICONS_PNG = {k: v for k, v in (
 MANIFEST = _build_manifest()
 
 
+_BOOT_DONE = [False]
+
+
+def _install_crash_guard():
+    """V8.0.4：闪退不再「无声无息」——未捕获异常写崩溃日志；启动阶段失败弹窗告知用户。"""
+    def _hook(exc_type, exc, tb):
+        try:
+            import traceback
+            txt = "".join(traceback.format_exception(exc_type, exc, tb))
+        except Exception:
+            txt = repr(exc)
+        try:
+            with open(os.path.join(data_dir(), "崩溃日志.txt"), "a", encoding="utf-8") as f:
+                f.write("\n=== %s V%s  %s ===\n%s\n"
+                        % (APP_NAME, APP_VER, time.strftime("%Y-%m-%d %H:%M:%S"), txt))
+        except Exception:
+            pass
+        log("未捕获异常: " + txt.replace("\n", " | ")[:900])
+        if not _BOOT_DONE[0] and os.name == "nt":
+            try:
+                import ctypes
+                ctypes.windll.user32.MessageBoxW(
+                    None,
+                    "热榜助手启动失败：\n\n%s\n\n日志已写入：\n%s"
+                    % (str(exc)[:300], os.path.join(data_dir(), "崩溃日志.txt")),
+                    "热榜助手 V%s" % APP_VER, 0x10)
+            except Exception:
+                pass
+    sys.excepthook = _hook
+    try:
+        def _thook(args):
+            if args.exc_type is SystemExit:
+                return
+            _hook(args.exc_type, args.exc_value, args.exc_traceback)
+        threading.excepthook = _thook
+    except Exception:
+        pass
+
+
 def main():
     global HTTPD
+    _install_crash_guard()
+    log("==== 启动 V%s (pid=%s frozen=%s) ====" % (APP_VER, os.getpid(),
+                                                bool(getattr(sys, "frozen", False))))
+    titles_ensure_readme()          # V8.0.5：题目缓存目录 + 给 AI 的数据说明
     port = acquire_port()
     bind = os.environ.get("REBANG_BIND") or "127.0.0.1"
-    HTTPD = ThreadingHTTPServer((bind, port), Handler)
+    HTTPD = None
+    for attempt in range(3):                    # V8.0.4：端口偶发占用时重试，别直接崩
+        try:
+            HTTPD = ThreadingHTTPServer((bind, port), Handler)
+            break
+        except OSError as e:
+            log("端口 %s 绑定失败(第 %d 次): %r" % (port, attempt + 1, e))
+            time.sleep(0.6)
+            if attempt == 2:
+                port = free_port()
+    if HTTPD is None:
+        raise RuntimeError("无法启动本地服务（端口 %s 一直被占用）" % port)
     HTTPD.daemon_threads = True
     url = "http://%s:%d/" % (bind if bind != "0.0.0.0" else "127.0.0.1", port)
-    log("启动 %s v%s @ %s" % (APP_NAME, APP_VER, url))
+    log("启动成功 %s v%s @ %s" % (APP_NAME, APP_VER, url))
+    _BOOT_DONE[0] = True
     threading.Thread(target=lambda: refresh_many([s for s in CFG.sources if s["enabled"]]),
                      daemon=True).start()
     threading.Thread(target=_periodic_refresh, daemon=True).start()

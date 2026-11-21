@@ -29,8 +29,8 @@ from html.parser import HTMLParser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 APP_NAME = "热榜助手"
-APP_VER = "8.0.7"
-PRESET_VER = "8.0.7"   # 内置源清单版本：变化时启动会把内置源的新地址/说明同步进用户已有配置
+APP_VER = "8.0.8"
+PRESET_VER = "8.0.8"   # 内置源清单版本：变化时启动会把内置源的新地址/说明同步进用户已有配置
 AUTHOR = "七度"
 # 安装包下载页（云托管静态页，手机浏览器可直接下载 exe/apk）
 DL_PAGE_URL = "https://quickest-ocelot-d9fti0mr03ae447f-1518118034.tcloudbaseapp.com/dl/"
@@ -297,8 +297,8 @@ DEFAULT_SOURCES = [
       note="七猫免费小说·排行榜（书旗官网为JS渲染抓不到，用七猫代替）", search="", cat="小说"),
     S("nov_weread", "纵横小说排行", "https://www.zongheng.com/rank/", "html", count=25,
       note="纵横中文网·排行榜（微信读书为JS渲染抓不到，用纵横代替）", search="", cat="小说"),
-    S("nov_fanqie", "番茄小说排行", "https://fanqienovel.com/rank", "html", count=25,
-      note="番茄免费小说·排行榜", search="", cat="小说"),
+    S("nov_fanqie", "番茄小说排行", "https://fanqienovel.com/api/rank/list?rank_type=1", "fanqie", count=25,
+      note="番茄免费小说·排行榜（走官方接口；网页版文字是字体加密的）", search="", cat="小说"),
     S("nov_fanshu", "帆书热门", "https://www.dushu365.com", "html", count=25,
       note="帆书（原樊登读书）·热门好书", search="", cat="小说"),
     S("nov_dangdang", "当当网排行", "http://bang.dangdang.com/books/bestsellers/01.00.00.00.00.00-recent7-0-0-1-1", "html",
@@ -932,7 +932,7 @@ DEFAULT_SETTINGS = {
     # sys=系统默认 / edge / chrome / custom（extBrowserPath）/ app=独立隔离小窗口（旧行为）
     "extBrowser": "daily",
     "extBrowserPath": "",    # 自定义浏览器 exe 完整路径
-    "showOnlyOk": True,      # 仅显示抓取成功的源
+    "showOnlyOk": False,     # V8.0.8：默认关闭（开着会把暂时失败的源整条藏起来，侧栏就找不到）
     "startupCheck": True,    # 启动时强制刷新并自动隐藏失败源
     "accent": "",            # 主题配色：空=经典红 / blue / green / violet / cyan / rose / amber
     "translate": "off",      # V7.9.14：翻译默认关闭
@@ -959,7 +959,7 @@ DEFAULT_SETTINGS = {
     "adContact": "Q&V：460275097",
     # V8.0.5：题目缓存（AI 数据源）——每天一个文件夹，JSONL 逐行落盘，可被 AI/智能体直接读取分析
     "titlesDir": "",         # 题目缓存根目录，空=默认 data_dir()/titles
-    "titlesKeep": 0,         # 历史保留天数：0=永久保留，可选 30/90/365
+    "titlesKeep": 30,        # V8.0.8：历史保留天数，默认 30 天；0=永久保留（可选 30/90/365）
 }
 
 
@@ -2077,11 +2077,12 @@ class Config:
         if _td != str(self.settings.get("titlesDir") or ""):
             self.settings["titlesDir"] = _td
         try:
-            _tk = int(self.settings.get("titlesKeep") or 0)
+            _tkv = self.settings.get("titlesKeep")
+            _tk = 30 if _tkv is None else int(_tkv)
         except Exception:
-            _tk = 0
+            _tk = 30
         if _tk not in (0, 30, 90, 365):
-            _tk = 0
+            _tk = 30
         if _tk != self.settings.get("titlesKeep") or _td != self.settings.get("titlesDir"):
             self.settings["titlesKeep"] = _tk
             self.settings["titlesDir"] = _td
@@ -4777,6 +4778,29 @@ def p_52pojie(url):
     return finish(out, sort_by_heat=False)
 
 
+def p_fanqie(url):
+    """V8.0.8 番茄小说：网页版标题是字体加密（私有区字符），改装官方排行接口的明文 JSON"""
+    raw = http_text(url, referer="https://fanqienovel.com/rank", timeout=20)
+    try:
+        data = json.loads(raw)
+    except Exception:
+        raise RuntimeError("番茄排行接口返回的不是 JSON（可能改版）")
+    lst = ((data.get("data") or {}).get("list")) or []
+    out = []
+    for b in lst[:60]:
+        name = b.get("bookName") or b.get("title") or ""
+        bid = str(b.get("bookId") or "")
+        if not name:
+            continue
+        it = mk_item(name, ("https://fanqienovel.com/page/" + bid) if bid else "https://fanqienovel.com/",
+                     None, b.get("thumbUri") or "", b.get("author") or "")
+        if it:
+            out.append(it)
+    if not out:
+        raise RuntimeError("番茄排行接口没有解析到书名")
+    return finish(out, sort_by_heat=False)
+
+
 def p_sucaizy(url):
     """素材资源：首页「最新发布」列表（posts.posts-item 里的 h2 标题）"""
     html = http_text(url, referer="https://www.sucaizy.com/", timeout=20)
@@ -4816,7 +4840,7 @@ PARSERS = {
     "pbc": p_pbc, "mof": p_mof, "caixin": p_caixin_econ, "cctv_econ": p_cctv_econ,
     "fangchan": p_fangchan, "mur": p_mur, "planners": p_planners,
     # V8.0.2：国家统计局数据发布 / 吾爱破解（Discuz 版块列表）
-    "stats": p_stats, "52pojie": p_52pojie, "sucaizy": p_sucaizy,
+    "stats": p_stats, "52pojie": p_52pojie, "sucaizy": p_sucaizy, "fanqie": p_fanqie,
 }
 
 
@@ -4881,6 +4905,16 @@ def run_parser(src, url=None):
         raise _err if _err else RuntimeError("全部通道失败")
     if not items:
         raise RuntimeError("解析结果为空")
+    # V8.0.8：字体加密检测——有的站（番茄小说等）把汉字换成私有区字符（U+E000~U+F8FF），
+    # 读出来全是方框。这种情况下宁可报「需要校对」，也不要给用户一堆 □□□□。
+    _pua = 0
+    _tot = 0
+    for _it in items[:30]:
+        _t = str(_it.get("title") or "")
+        _tot += len(_t)
+        _pua += sum(1 for _ch in _t if 0xE000 <= ord(_ch) <= 0xF8FF)
+    if _tot and _pua / float(_tot) > 0.15:
+        raise RuntimeError("该站标题用了字体加密（显示为方框），页面文字读不出来；可点「校对」换别的页面或地址")
     return items
 
 
@@ -5042,11 +5076,11 @@ def titles_ensure_readme():
 def titles_cleanup():
     """按 titlesKeep 清理过期日期文件夹（0=永久保留；每天最多执行一次）"""
     try:
-        keep = 0
+        keep = CFG.settings.get("titlesKeep")
         try:
-            keep = int(CFG.settings.get("titlesKeep") or 0)
+            keep = 30 if keep is None else int(keep)
         except Exception:
-            keep = 0
+            keep = 30
         if keep <= 0:
             return
         root = titles_dir()
@@ -5869,14 +5903,46 @@ class Handler(BaseHTTPRequestHandler):
                                 if os.path.isdir(d) else []
                     except Exception:
                         files = []
-                    self._json({"ok": True, "dir": d, "keep": int(CFG.settings.get("titlesKeep") or 0),
+                    self._json({"ok": True, "dir": d, "keep": int(CFG.settings.get("titlesKeep") if CFG.settings.get("titlesKeep") is not None else 30),
                                 "days": files, "desktop": True, "dataDir": data_dir(),
                                 "exists": os.path.isdir(d)})
                 except Exception as e:
                     log("titles/info 失败: %r" % (e,))
                     self._json({"ok": False, "error": str(e)[:120],
                                 "dir": os.path.join(data_dir(), "titles"),
-                                "keep": 0, "desktop": True, "dataDir": data_dir()})
+                                "keep": 30, "desktop": True, "dataDir": data_dir()})
+            elif path == "/api/titles/preview":
+                # V8.0.8：预览当天缓存（设置页「预览」按钮），返回最近 60 条
+                try:
+                    root = titles_dir()
+                    day = time.strftime("%Y-%m-%d")
+                    p_all = os.path.join(root, day, "_all.jsonl")
+                    items = []
+                    if os.path.isfile(p_all):
+                        try:
+                            with open(p_all, "r", encoding="utf-8", errors="replace") as f:
+                                lines = f.readlines()[-600:]
+                            for ln in lines[-60:]:
+                                ln = ln.strip()
+                                if not ln:
+                                    continue
+                                try:
+                                    o = json.loads(ln)
+                                except Exception:
+                                    continue
+                                items.append({"ts": o.get("ts", ""), "src": o.get("src", ""),
+                                              "cat": o.get("cat", ""), "title": o.get("title", "")})
+                        except Exception as e:
+                            log("titles/preview 读取失败: %r" % (e,))
+                    try:
+                        days = sorted([x for x in os.listdir(root)
+                                       if re.fullmatch(r"\d{4}-\d{2}-\d{2}", x)]) if os.path.isdir(root) else []
+                    except Exception:
+                        days = []
+                    self._json({"ok": True, "dir": root, "day": day, "days": days,
+                                "count": len(items), "items": items})
+                except Exception as e:
+                    self._json({"ok": False, "error": str(e)[:120], "items": []})
             elif path == "/api/hot":
                 ids = [x for x in (qs.get("ids", [""])[0] or "").split(",") if x]
                 force = qs.get("force", ["0"])[0] == "1"
@@ -6262,7 +6328,7 @@ class Handler(BaseHTTPRequestHandler):
                 CFG.save()
                 titles_ensure_readme()
                 self._json({"ok": ok, "dir": titles_dir(),
-                            "keep": int(CFG.settings.get("titlesKeep") or 0)})
+                            "keep": int(CFG.settings.get("titlesKeep") if CFG.settings.get("titlesKeep") is not None else 30)})
             elif p.path == "/api/titles/pickdir":
                 # V8.0.6：Windows 原生「选择文件夹」对话框（ctypes，无额外依赖）
                 if os.name != "nt":
